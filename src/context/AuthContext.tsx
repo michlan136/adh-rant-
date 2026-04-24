@@ -21,60 +21,82 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// ── Demo credentials ──────────────────────────────────────────────────────────
-const DEMO_ACCOUNTS: Record<string, AuthUser & { password: string }> = {
-  'jean.dupont@email.com': {
-    email: 'jean.dupont@email.com',
-    password: 'adhérent123',
-    role: 'member',
-    name: 'Jean Dupont',
-    initials: 'JD',
-  },
-  'admin@asso.fr': {
-    email: 'admin@asso.fr',
-    password: 'admin2026',
-    role: 'admin',
-    name: 'Admin Système',
-    initials: 'AS',
-  },
-};
-
-const STORAGE_KEY = 'ga_auth_user';
+const STORAGE_KEY_USER = 'ga_auth_user';
+const STORAGE_KEY_TOKEN = 'ga_auth_token'; // Nouveau : pour stocker le JWT de FastAPI
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from localStorage
+  // Restaurer la session depuis le localStorage au rechargement de la page
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: AuthUser = JSON.parse(raw);
+      const rawUser = localStorage.getItem(STORAGE_KEY_USER);
+      const token = localStorage.getItem(STORAGE_KEY_TOKEN);
+
+      // On vérifie qu'on a bien l'utilisateur ET le token
+      if (rawUser && token) {
+        const parsed: AuthUser = JSON.parse(rawUser);
         setUser(parsed);
       }
     } catch {
-      // ignore
+      // Ignorer les erreurs de parsing
     } finally {
       setLoading(false);
     }
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const account = DEMO_ACCOUNTS[email.trim().toLowerCase()];
-    if (!account || account.password !== password) {
-      return { ok: false, error: 'Email ou mot de passe incorrect.' };
+    try {
+      // 1. On appelle l'API Python FastAPI
+      const response = await fetch('http://127.0.0.1:8000/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+
+      const data = await response.json();
+
+      // 2. Si FastAPI renvoie une erreur (mauvais mot de passe, etc.)
+      if (!response.ok) {
+        return { ok: false, error: data.detail || 'Email ou mot de passe incorrect.' };
+      }
+
+      // 3. Astuce : Générer un nom et des initiales factices basés sur l'email 
+      // (puisque la base de données ne renvoie que l'email pour le moment)
+      const namePart = data.user.email.split('@')[0];
+      const generatedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+      const generatedInitials = generatedName.substring(0, 2).toUpperCase();
+
+      const userData: AuthUser = {
+        email: data.user.email,
+        role: data.user.role as UserRole,
+        name: generatedName,
+        initials: generatedInitials,
+      };
+
+      // 4. Mettre à jour l'état React
+      setUser(userData);
+
+      // 5. Sauvegarder dans le navigateur
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(userData));
+      localStorage.setItem(STORAGE_KEY_TOKEN, data.token); // On stocke le jeton de sécurité !
+
+      return { ok: true };
+
+    } catch (error) {
+      console.error("Erreur de communication avec le backend :", error);
+      return { ok: false, error: "Le serveur est injoignable. Vérifiez que l'API est lancée." };
     }
-    const { password: _p, ...userData } = account;
-    setUser(userData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
-    return { ok: true };
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_TOKEN); // On supprime aussi le token
     router.push('/login');
   }, [router]);
 
