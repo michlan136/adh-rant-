@@ -22,10 +22,6 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    // 🚨 TEST VISUEL : Cette boîte DOIT apparaître quand tu cliques
-    alert("Le bouton a été cliqué ! Email tapé : " + email);
-    console.log("Envoi au serveur...");
-
     const res = await login(email, password);
     if (res.ok) {
       if (role === 'admin') {
