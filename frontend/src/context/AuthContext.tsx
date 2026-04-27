@@ -85,6 +85,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(userData));
       localStorage.setItem(STORAGE_KEY_TOKEN, data.token); // On stocke le jeton de sécurité !
 
+      // AJOUT : Sauvegarder dans les cookies pour le Middleware (Redirection instantanée)
+      document.cookie = `ga_auth_token=${data.token}; path=/; max-age=7200; SameSite=Lax`;
+      document.cookie = `ga_auth_role=${data.user.role}; path=/; max-age=7200; SameSite=Lax`;
+
       return { ok: true, role: data.user.role };
     } catch (error) {
       console.error("Erreur de communication avec le backend :", error);
@@ -96,6 +100,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY_USER);
     localStorage.removeItem(STORAGE_KEY_TOKEN); // On supprime aussi le token
+    
+    // Suppression des cookies pour le Middleware
+    document.cookie = 'ga_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    document.cookie = 'ga_auth_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    
     router.push('/login');
   }, [router]);
 
