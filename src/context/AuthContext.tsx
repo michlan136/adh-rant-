@@ -15,7 +15,7 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; role?: string; error?: string }>;
   logout: () => void;
 }
 
@@ -85,8 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(userData));
       localStorage.setItem(STORAGE_KEY_TOKEN, data.token); // On stocke le jeton de sécurité !
 
-      return { ok: true };
-
+      return { ok: true, role: data.user.role };
     } catch (error) {
       console.error("Erreur de communication avec le backend :", error);
       return { ok: false, error: "Le serveur est injoignable. Vérifiez que l'API est lancée." };

@@ -12,8 +12,7 @@ from datetime import datetime, timedelta
 # 1. CONFIGURATION DE LA BASE DE DONNÉES
 # ==========================================
 # ⚠️ À MODIFIER : Mets ton vrai mot de passe et le vrai nom de ta base de données à la fin
-DATABASE_URL = "postgresql://postgres:michlan@localhost:5432/postgres"
-
+DATABASE_URL = "postgresql://postgres:Hecd1106@localhost:5000/postgres"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
