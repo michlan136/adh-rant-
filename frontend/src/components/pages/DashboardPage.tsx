@@ -1,34 +1,102 @@
 'use client';
 
 import { PageId } from '@/types';
+import { useState, useEffect } from 'react';
 
 interface DashboardPageProps {
   onNavigate: (page: PageId) => void;
 }
 
+interface DashboardData {
+  stats: {
+    statut: string;
+    expiration: string;
+    events_count: number;
+    docs_count: number;
+    messages_count: number;
+  };
+  activities: Array<{
+    color: string;
+    title: string;
+    desc: string;
+    time: string;
+  }>;
+  upcoming_events: Array<{
+    title: string;
+    date: string;
+    time: string;
+    location: string;
+    tag: string;
+  }>;
+}
+
 export default function DashboardPage({ onNavigate }: DashboardPageProps) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const response = await fetch('/api/adherents/me/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('ga_auth_token')}`
+          }
+        });
+        if (response.ok) {
+          const d = await response.json();
+          setData(d);
+        }
+      } catch (err) {
+        console.error("Erreur fetch dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div className="loading-spinner" style={{ marginBottom: '16px' }}>Chargement du tableau de bord...</div>
+      </div>
+    );
+  }
+
+  const stats = data?.stats || {
+    statut: 'Active',
+    expiration: 'Non définie',
+    events_count: 0,
+    docs_count: 0,
+    messages_count: 0
+  };
+
+  const activities = data?.activities || [];
+  const upcoming_events = data?.upcoming_events || [];
+
   return (
     <div className="page-enter">
       {/* Stats Grid */}
       <div className="stats-grid">
         <div className="stat-card">
           <span className="badge green">Adhésion</span>
-          <div className="value">Active</div>
-          <div className="label">Expire le 15 Juin 2026</div>
+          <div className="value">{stats.statut}</div>
+          <div className="label">Expire le {stats.expiration}</div>
         </div>
         <div className="stat-card">
           <span className="badge blue">Événements</span>
-          <div className="value">3</div>
-          <div className="label">À venir ce mois</div>
+          <div className="value">{stats.events_count}</div>
+          <div className="label">À venir</div>
         </div>
         <div className="stat-card">
           <span className="badge purple">Documents</span>
-          <div className="value">12</div>
+          <div className="value">{stats.docs_count}</div>
           <div className="label">Disponibles</div>
         </div>
         <div className="stat-card">
           <span className="badge orange">Messages</span>
-          <div className="value">5</div>
+          <div className="value">{stats.messages_count}</div>
           <div className="label">Non lus</div>
         </div>
       </div>
@@ -44,16 +112,15 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               </svg>
             </div>
             <div className="activity-list">
-              {[
-                { color: 'green', icon: <polyline points="20,6 9,17 4,12" />, title: 'Participation confirmée', desc: <>Atelier Formation Professionnelle · <span style={{ color: 'var(--primary)' }}>25 Mai 2026</span></>, time: 'Il y a 2 heures' },
-                { color: 'blue', icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /></>, title: 'Nouveau document disponible', desc: 'Guide des bénéfices adhérents 2026', time: 'Il y a 1 jour' },
-                { color: 'purple', icon: <><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>, title: 'Nouvel événement', desc: <>Conférence Annuelle · <span style={{ color: 'var(--primary)' }}>10 Juin 2026</span></>, time: 'Il y a 3 jours' },
-                { color: 'orange', icon: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>, title: 'Rappel', desc: 'Votre carte expire dans 45 jours', time: 'Il y a 5 jours' },
-              ].map((item, i) => (
+              {activities.length > 0 ? activities.map((item, i) => (
                 <div key={i} className="activity-item">
                   <div className={`activity-dot ${item.color}`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
-                      {item.icon}
+                      {item.color === 'blue' ? (
+                        <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /></>
+                      ) : (
+                        <polyline points="20,6 9,17 4,12" />
+                      )}
                     </svg>
                   </div>
                   <div className="activity-content">
@@ -62,7 +129,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                     <div className="time">{item.time}</div>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div style={{ color: 'var(--text-muted)', fontSize: '14px', padding: '20px', textAlign: 'center' }}>
+                  Aucune activité récente.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -77,12 +148,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             </svg>
           </div>
 
-          {[
-            { gradient: 'linear-gradient(135deg,#667eea,#764ba2)', tag: 'Formation', title: 'Atelier Formation Professionnelle', date: '25 Mai 2026', time: '14:00 – 17:00', location: 'Salle de Conférence A' },
-            { gradient: 'linear-gradient(135deg,#0EA5E9,#0369A1)', tag: 'Conférence', title: 'Conférence Annuelle', date: '10 Juin 2026', time: '09:00 – 18:00', location: 'Grand Palais, Paris' },
-          ].map((ev, i) => (
+          {upcoming_events.length > 0 ? upcoming_events.map((ev, i) => (
             <div key={i} className="event-card">
-              <div className="event-img-placeholder" style={{ background: ev.gradient }}>
+              <div className="event-img-placeholder" style={{ background: i === 0 ? 'linear-gradient(135deg,#667eea,#764ba2)' : 'linear-gradient(135deg,#0EA5E9,#0369A1)' }}>
                 <span className="event-tag">{ev.tag}</span>
               </div>
               <div className="event-body">
@@ -106,9 +174,28 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                 </div>
               </div>
             </div>
-          ))}
+          )) : (
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px', padding: '20px', textAlign: 'center' }}>
+              Aucun événement à venir.
+            </div>
+          )}
         </div>
       </div>
+      
+      <style jsx>{`
+        .loading-spinner {
+          display: inline-block;
+          width: 30px;
+          height: 30px;
+          border: 3px solid rgba(79, 70, 229, 0.1);
+          border-radius: 50%;
+          border-top-color: var(--primary);
+          animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,0 +1,70 @@
+[0713571887 -> +981123444]: Test Contenu
+---
+[0713571887 -> +212528000001]: Test Contenu
+---
+[0713571887 -> +212981123444]: Test Contenu
+---
+[0713571887 -> +212981123444]: Test Contenu
+---
+[0713571887 -> +981123444]: Test live message
+---
+[0713571887 -> +212528000001]: Test live message
+---
+[0713571887 -> +212981123444]: Test live message
+---
+[0713571887 -> +212981123444]: Test live message
+---
+[0713571887 -> +212716277057]: test
+---
+[0713571887 -> +212716277057]: salam
+---
+[0713571887 -> +212716277057]: TEST
+---
+[0713571887 -> +212713571887]: exemple
+---
+[0713571887 -> +212612345678]: exemple
+---
+[0713571887 -> +212981123444]: exemple
+---
+[0713571887 -> +212981123444]: exemple
+---
+[0713571887 -> +212713571887]: (Test vers +212713571887)
+
+salam
+---
+[0713571887 -> +212713571887]: (Test vers +212612345678)
+
+salam
+---
+[0713571887 -> +212713571887]: (Test vers +212981123444)
+
+salam
+---
+[0713571887 -> +212713571887]: (Test vers +212981123444)
+
+salam
+---
+[0713571887 -> +212713571887]: (Test vers +212713571887)
+
+salam
+---
+ERROR LOG: No root path can be found for the provided module 'app'. This can happen because the module came from an import hook that does not provide file name information or because it's a namespace package. In this case the root path needs to be explicitly provided.
+---
+[0713571887 -> +212713571887]: (Test vers +212612345678)
+
+salam
+---
+ERROR LOG: No root path can be found for the provided module 'app'. This can happen because the module came from an import hook that does not provide file name information or because it's a namespace package. In this case the root path needs to be explicitly provided.
+---
+[0713571887 -> +212713571887]: (Test vers +212981123444)
+
+salam
+---
+ERROR LOG: No root path can be found for the provided module 'app'. This can happen because the module came from an import hook that does not provide file name information or because it's a namespace package. In this case the root path needs to be explicitly provided.
+---
+[0713571887 -> +212713571887]: (Test vers +212981123444)
+
+salam
+---
+ERROR LOG: No root path can be found for the provided module 'app'. This can happen because the module came from an import hook that does not provide file name information or because it's a namespace package. In this case the root path needs to be explicitly provided.
+---

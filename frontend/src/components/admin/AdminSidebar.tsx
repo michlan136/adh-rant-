@@ -39,6 +39,21 @@ const navItems: { id: AdminPageId; label: string; icon: React.ReactNode }[] = [
     label: 'Documents',
     icon: <i className="far fa-file-alt" style={{width: 18, textAlign: 'center', fontSize: 15}}></i>,
   },
+  {
+    id: 'evenements',
+    label: 'Événements',
+    icon: <i className="fas fa-calendar-alt" style={{width: 18, textAlign: 'center', fontSize: 15}}></i>,
+  },
+  {
+    id: 'renouvellements',
+    label: 'Renouvellements',
+    icon: <i className="fas fa-sync" style={{width: 18, textAlign: 'center', fontSize: 15}}></i>,
+  },
+  {
+    id: 'finances' as AdminPageId,
+    label: 'Finances',
+    icon: <i className="fas fa-wallet" style={{width: 18, textAlign: 'center', fontSize: 15}}></i>,
+  },
 ];
 
 export default function AdminSidebar({ activePage, onNavigate }: AdminSidebarProps) {

@@ -1,95 +1,672 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AdminPageId } from '@/types';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminTopbar from '@/components/admin/AdminTopbar';
+import { fetchWithAuth } from '@/lib/api';
+import InscriptionForm from '@/components/admin/InscriptionForm';
 
 export default function AdminPage() {
   const [activePage, setActivePage] = useState<AdminPageId>('dashboard');
+  const [stats, setStats] = useState<any>(null);
+  const [adherents, setAdherents] = useState<any[]>([]);
+  const [demandes, setDemandes] = useState<any[]>([]);
+  const [cartes, setCartes] = useState<any[]>([]);
+  const [renouvellements, setRenouvellements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Nouveaux états
+  const [selectedDemande, setSelectedDemande] = useState<any>(null);
+  const [showVoirModal, setShowVoirModal] = useState(false);
+  const [showNewInscModal, setShowNewInscModal] = useState(false);
+  const [newInscForm, setNewInscForm] = useState({ nom_contact: '', prenom_contact: '', email_contact: '', telephone_contact: '', raison_sociale_entreprise: '' });
+
+  // Nouveaux états pour Adhérents (Recherche, Filtre, Édition)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cartesSearchQuery, setCartesSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('Tous');
+  const [editingAdherent, setEditingAdherent] = useState<any>(null);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
+
+  // Nouveaux états pour Communications
+  const [communications, setCommunications] = useState<any[]>([]);
+  const [evenements, setEvenements] = useState<any[]>([]);
+  const [showCommModal, setShowCommModal] = useState(false);
+  
+  // Nouveaux états pour Événements
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    titre: '',
+    date_evenement: '',
+    heure_debut: '',
+    heure_fin: '',
+    categorie: 'Conférence',
+    lieu: '',
+    description: '',
+    places_limitees: ''
+  });
+  const [commForm, setCommForm] = useState({
+    titre: '',
+    canal: 'Email',
+    contenu: '',
+    cible: 'tous',
+    evenement_id: '',
+    adherent_ids: [] as number[],
+    file: null as File | null
+  });
+  const [whatsappQueue, setWhatsappQueue] = useState<any[]>([]);
+  const [showWhatsappModal, setShowWhatsappModal] = useState(false);
+  const [sentWhatsappIds, setSentWhatsappIds] = useState<string[]>([]);
+
+  // Nouveaux états pour Documents
+  const [globalDocuments, setGlobalDocuments] = useState<any[]>([]);
+  const [showDocModal, setShowDocModal] = useState(false);
+  const [docForm, setDocForm] = useState({ nom_fichier: '', categorie: 'Règlements', file: null as File | null });
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  // Modal credentials après validation
+  const [credentials, setCredentials] = useState<{ email: string; password: string | null } | null>(null);
+
+  // Nouveaux états Finances
+  const [financeTab, setFinanceTab] = useState<'revenus' | 'depenses' | 'fournisseurs'>('revenus');
+  const [depenses, setDepenses] = useState<any[]>([]);
+  const [fournisseurs, setFournisseurs] = useState<any[]>([]);
+  const [showDepenseModal, setShowDepenseModal] = useState(false);
+  const [showFournisseurModal, setShowFournisseurModal] = useState(false);
+  const [depenseForm, setDepenseForm] = useState({ titre: '', montant: '', categorie: 'Administratif', mode_paiement: 'Virement', fournisseur_id: '', commentaire: '' });
+  const [fournisseurForm, setFournisseurForm] = useState({ nom: '', contact_nom: '', email: '', telephone: '', adresse: '', type_service: '' });
+
+  const handleRefuser = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir refuser cette inscription ?')) return;
+    try {
+      await fetchWithAuth(`/api/admin/demandes/${id}/refuser`, { method: 'POST' });
+      setDemandes(demandes.filter(d => d.id !== id));
+      const s = await fetchWithAuth('/api/admin/stats');
+      setStats(s);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors du refus');
+    }
+  };
+
+  const handleValider = async (id: number) => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/demandes/${id}/valider`, { method: 'POST' });
+      setDemandes(demandes.filter(d => d.id !== id));
+      const s = await fetchWithAuth('/api/admin/stats');
+      setStats(s);
+      setCredentials({ email: res.email, password: res.password_genere || null });
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la validation');
+    }
+  };
+
+  const handleCreateInsc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetchWithAuth('/api/admin/inscriptions', {
+        method: 'POST',
+        body: JSON.stringify(newInscForm)
+      });
+      alert(`Inscription créée et validée automatiquement !\nEmail : ${res.email}\nMot de passe : ${res.password_genere}`);
+      setShowNewInscModal(false);
+      setNewInscForm({ nom_contact: '', prenom_contact: '', email_contact: '', telephone_contact: '', raison_sociale_entreprise: '' });
+      const s = await fetchWithAuth('/api/admin/stats');
+      setStats(s);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la création de l\'inscription. L\'email est peut-être déjà utilisé.');
+    }
+  };
+
+  const handlePrint = (frontId: string, backId: string) => {
+    const frontEl = document.getElementById(frontId);
+    const backEl = document.getElementById(backId);
+    if (!frontEl || !backEl) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Impression Carte</title>
+          <style>
+            body { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px; }
+            @media print {
+              body { padding: 0; }
+              * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+            .card-container {
+              width: 340px;
+              height: 215px;
+              position: relative;
+              border: 1.5px solid #c8b89a;
+              border-radius: 7px;
+              overflow: hidden;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card-container">${frontEl.innerHTML}</div>
+          <div class="card-container">${backEl.innerHTML}</div>
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleUpdateAdherent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdherent) return;
+    try {
+      await fetchWithAuth(`/api/admin/adherents/${editingAdherent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          nom: editingAdherent.nom,
+          prenom: editingAdherent.prenom,
+          raison_sociale: editingAdherent.raison_sociale,
+          email: editingAdherent.email,
+          telephone: editingAdherent.telephone,
+          statut: editingAdherent.statut,
+          ice: editingAdherent.ice,
+          adresse: editingAdherent.adresse,
+          cin: editingAdherent.cin,
+          date_naissance: editingAdherent.date_naissance,
+          profession: editingAdherent.profession,
+          numero_patente: editingAdherent.numero_patente,
+          tax_professionnelle: editingAdherent.tax_professionnelle,
+          description_activite: editingAdherent.description_activite,
+        }),
+      });
+      alert('Adhérent mis à jour !');
+      setEditingAdherent(null);
+      // Reload adherents
+      const data = await fetchWithAuth('/api/admin/adherents');
+      setAdherents(data);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la mise à jour');
+    }
+  };
+
+  const handleDeleteAdherent = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer définitivement cet adhérent et son compte de connexion ? Cette action est irréversible.')) return;
+    try {
+      await fetchWithAuth(`/api/admin/adherents/${id}`, { method: 'DELETE' });
+      // Update local state to avoid refetching
+      setAdherents(adherents.filter(a => a.id !== id));
+      const s = await fetchWithAuth('/api/admin/stats');
+      setStats(s);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la suppression de l\'adhérent');
+    }
+  };
+
+  const handleApprouverRenouvellement = async (id: number) => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/renouvellements/${id}/approuver`, { method: 'POST' });
+      alert(res.message);
+      const rens = await fetchWithAuth('/api/admin/renouvellements');
+      setRenouvellements(rens);
+      const s = await fetchWithAuth('/api/admin/stats');
+      setStats(s);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de l\'approbation');
+    }
+  };
+
+  const handleRefuserRenouvellement = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir refuser ce renouvellement ?')) return;
+    try {
+      await fetchWithAuth(`/api/admin/renouvellements/${id}/refuser`, { method: 'POST' });
+      alert('Renouvellement refusé');
+      const rens = await fetchWithAuth('/api/admin/renouvellements');
+      setRenouvellements(rens);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors du refus');
+    }
+  };
+
+
+
+  const handleRenouveler = async (carteId: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir créer une demande de renouvellement pour cette carte ?')) return;
+    try {
+      const res = await fetchWithAuth(`/api/admin/cartes/${carteId}/renouveler`, { method: 'POST' });
+      alert(res.message);
+      // Recharge les cartes pour refléter le changement (inactive/active)
+      const data = await fetchWithAuth('/api/admin/cartes');
+      setCartes(data);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.detail || 'Erreur lors du renouvellement');
+    }
+  };
+
+  const handleTelechargerCarte = async (carteId: number, nomAdherent: string) => {
+    const element = document.getElementById(`carte-${carteId}`);
+    if (!element) return;
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `carte_${nomAdherent.replace(/\s+/g, '_')}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error("Erreur de téléchargement", error);
+    }
+  };
+
+  const handleDocumentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docForm.file || !docForm.nom_fichier || !docForm.categorie) {
+      alert('Veuillez remplir tous les champs et sélectionner un fichier.');
+      return;
+    }
+    setUploadingDoc(true);
+    try {
+      // 1. Upload file
+      const formData = new FormData();
+      formData.append('file', docForm.file);
+      const uploadRes = await fetch('http://localhost:8000/api/admin/upload-doc', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error('Erreur lors de l\'upload du fichier');
+      const uploadData = await uploadRes.json();
+
+      // 2. Create document entry
+      const docFormData = new FormData();
+      docFormData.append('nom_fichier', docForm.nom_fichier);
+      docFormData.append('chemin_fichier', uploadData.filepath);
+      docFormData.append('categorie', docForm.categorie);
+      docFormData.append('taille', (docForm.file.size / 1024).toFixed(1) + ' KB');
+      
+      const res = await fetch('http://localhost:8000/api/admin/documents', {
+        method: 'POST',
+        body: docFormData,
+      });
+      if (!res.ok) throw new Error('Erreur lors de la création du document');
+      
+      alert('Document ajouté avec succès !');
+      setShowDocModal(false);
+      setDocForm({ nom_fichier: '', categorie: 'Règlements', file: null });
+      // Refresh list
+      const docs = await fetchWithAuth('/api/admin/documents');
+      setGlobalDocuments(docs);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Erreur');
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDocument = async (id: number) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) return;
+    try {
+      await fetchWithAuth(`/api/admin/documents/${id}`, { method: 'DELETE' });
+      setGlobalDocuments(globalDocuments.filter(d => d.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la suppression');
+    }
+  };
+
+  const handleSubmitCommunication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (commForm.cible === 'evenement' && !commForm.evenement_id) {
+      alert("Veuillez sélectionner un événement.");
+      return;
+    }
+    if (commForm.cible === 'partie' && commForm.adherent_ids.length === 0) {
+      alert("Veuillez sélectionner au moins un adhérent.");
+      return;
+    }
+    
+    try {
+      const formData = new FormData();
+      formData.append('titre', commForm.titre);
+      formData.append('canal', commForm.canal);
+      formData.append('contenu', commForm.contenu);
+      formData.append('cible', commForm.cible);
+      if (commForm.evenement_id) formData.append('evenement_id', commForm.evenement_id);
+      if (commForm.adherent_ids.length > 0) formData.append('adherent_ids', JSON.stringify(commForm.adherent_ids));
+      if (commForm.file) formData.append('file', commForm.file);
+
+      const res = await fetchWithAuth('/api/admin/communications', {
+        method: 'POST',
+        body: formData
+      });
+      
+      setShowCommModal(false);
+      setCommForm({ titre: '', canal: 'Email', contenu: '', cible: 'tous', evenement_id: '', adherent_ids: [], file: null });
+      
+      const comms = await fetchWithAuth('/api/admin/communications');
+      setCommunications(comms);
+
+      if (res.whatsapp_links && res.whatsapp_links.length > 0) {
+        setWhatsappQueue(res.whatsapp_links);
+        setSentWhatsappIds([]);
+        setShowWhatsappModal(true);
+        
+        // If only 1 recipient, open immediately
+        if (res.whatsapp_links.length === 1) {
+          window.open(res.whatsapp_links[0].link, '_blank');
+        }
+      } else {
+        alert(`Communication envoyée avec succès !`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'envoi de la communication");
+    }
+  };
+
+  const handleEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...eventForm,
+        places_limitees: eventForm.places_limitees ? parseInt(eventForm.places_limitees) : null,
+        heure_debut: eventForm.heure_debut || null,
+        heure_fin: eventForm.heure_fin || null,
+      };
+      await fetchWithAuth('/api/admin/evenements', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      alert('Événement créé avec succès !');
+      setShowEventModal(false);
+      setEventForm({ titre: '', date_evenement: '', heure_debut: '', heure_fin: '', categorie: 'Conférence', lieu: '', description: '', places_limitees: '' });
+      const evts = await fetchWithAuth('/api/admin/evenements');
+      setEvenements(evts);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la création de l'événement");
+    }
+  };
+
+  const handleEditEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEvent) return;
+    try {
+      const payload = {
+        ...editingEvent,
+        places_limitees: editingEvent.places_limitees ? parseInt(editingEvent.places_limitees) : null,
+        heure_debut: editingEvent.heure_debut || null,
+        heure_fin: editingEvent.heure_fin || null,
+      };
+      console.log('Update Event Payload:', payload);
+      await fetchWithAuth(`/api/admin/evenements/${editingEvent.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      alert('Événement mis à jour avec succès !');
+      setEditingEvent(null);
+      const evts = await fetchWithAuth('/api/admin/evenements');
+      setEvenements(evts);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la modification de l'événement");
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: number) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cet événement ?')) return;
+    try {
+      await fetchWithAuth(`/api/admin/evenements/${eventId}`, {
+        method: 'DELETE'
+      });
+      alert('Événement supprimé avec succès !');
+      const evts = await fetchWithAuth('/api/admin/evenements');
+      setEvenements(evts);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la suppression de l'événement");
+    }
+  };
+
+  const handleDepenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...depenseForm,
+        montant: parseFloat(depenseForm.montant),
+        fournisseur_id: depenseForm.fournisseur_id ? parseInt(depenseForm.fournisseur_id) : null
+      };
+      await fetchWithAuth('/api/finance/depenses', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      alert('Dépense enregistrée !');
+      setShowDepenseModal(false);
+      setDepenseForm({ titre: '', montant: '', categorie: 'Administratif', mode_paiement: 'Virement', fournisseur_id: '', commentaire: '' });
+      // Refresh
+      const d = await fetchWithAuth('/api/finance/depenses');
+      setDepenses(d);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'enregistrement de la dépense");
+    }
+  };
+
+  const handleFournisseurSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetchWithAuth('/api/finance/fournisseurs', {
+        method: 'POST',
+        body: JSON.stringify(fournisseurForm)
+      });
+      alert('Fournisseur ajouté !');
+      setShowFournisseurModal(false);
+      setFournisseurForm({ nom: '', contact_nom: '', email: '', telephone: '', adresse: '', type_service: '' });
+      // Refresh
+      const f = await fetchWithAuth('/api/finance/fournisseurs');
+      setFournisseurs(f);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'ajout du fournisseur");
+    }
+  };
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        if (activePage === 'dashboard' || activePage === 'inscriptions') {
+          const data = await fetchWithAuth('/api/admin/stats');
+          setStats(data);
+
+          if (activePage === 'inscriptions') {
+            const d = await fetchWithAuth('/api/admin/demandes');
+            setDemandes(d);
+          }
+        }
+        if (activePage === 'adherents') {
+          const data = await fetchWithAuth('/api/admin/adherents');
+          setAdherents(data);
+        }
+        if (activePage === 'cartes') {
+          const data = await fetchWithAuth('/api/admin/cartes');
+          setCartes(data);
+        }
+        if (activePage === 'communications') {
+          const comms = await fetchWithAuth('/api/admin/communications');
+          setCommunications(comms);
+          const evts = await fetchWithAuth('/api/admin/evenements');
+          setEvenements(evts);
+          if (adherents.length === 0) {
+            const adh = await fetchWithAuth('/api/admin/adherents');
+            setAdherents(adh);
+          }
+        }
+        if (activePage === 'documents') {
+          const docs = await fetchWithAuth('/api/admin/documents');
+          setGlobalDocuments(docs);
+        }
+        if (activePage === 'evenements') {
+          const evts = await fetchWithAuth('/api/admin/evenements');
+          setEvenements(evts);
+        }
+        if (activePage === 'renouvellements') {
+          const rens = await fetchWithAuth('/api/admin/renouvellements');
+          setRenouvellements(rens);
+        }
+        if (activePage === 'finances') {
+          const rens = await fetchWithAuth('/api/admin/renouvellements');
+          setRenouvellements(rens);
+          const f = await fetchWithAuth('/api/finance/fournisseurs');
+          setFournisseurs(f);
+          const d = await fetchWithAuth('/api/finance/depenses');
+          setDepenses(d);
+        }
+      } catch (err) {
+        console.error("Erreur de chargement", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [activePage]);
+
+  // Filtrage des adhérents
+  const filteredAdherents = adherents.filter(adh => {
+    const matchesFilter = filterType === 'Tous' || adh.type_adherent === filterType;
+    const lowerQuery = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery || 
+      (adh.nom && adh.nom.toLowerCase().includes(lowerQuery)) ||
+      (adh.sub_nom && adh.sub_nom.toLowerCase().includes(lowerQuery)) ||
+      (adh.reference && adh.reference.toLowerCase().includes(lowerQuery)) ||
+      (adh.email && adh.email.toLowerCase().includes(lowerQuery)) ||
+      (adh.telephone && adh.telephone.toLowerCase().includes(lowerQuery));
+      
+    return matchesFilter && matchesSearch;
+  });
+
+  const filteredCartes = cartes.filter(c => {
+    const lowerQuery = cartesSearchQuery.toLowerCase();
+    return !cartesSearchQuery || 
+      (c.nom_adherent && c.nom_adherent.toLowerCase().includes(lowerQuery)) ||
+      (c.numero_carte && c.numero_carte.toLowerCase().includes(lowerQuery));
+  });
 
   return (
     <>
       <AdminTopbar />
       <AdminSidebar activePage={activePage} onNavigate={setActivePage} />
-      
+
       <main className="main" style={{ minHeight: 'calc(100vh - var(--topbar-h))', padding: '32px' }}>
         {/* TABLEAU DE BORD */}
         {activePage === 'dashboard' && (
-          <div className="page-content animation-fade-in">
+          <div className="page-content animation-fade-in" style={{ background: 'linear-gradient(135deg, #f6f8fb 0%, #e9eef5 100%)', minHeight: '100%', padding: '24px', borderRadius: '20px' }}>
             <div className="page-title">
-              <h1>Tableau de bord</h1>
-              <p>Vue d'ensemble de la gestion des adhérents</p>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}>Tableau de bord</h1>
+              <p style={{ fontSize: '14px', color: '#64748b' }}>Vue d'ensemble de la gestion des adhérents</p>
             </div>
 
-            <div className="stat-grid admin-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px', marginTop: '28px' }}>
-              <div className="stat-card">
+            <div className="stat-grid admin-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginTop: '24px' }}>
+              {/* Card 1 */}
+              <div className="stat-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', transition: 'all 0.3s ease', cursor: 'pointer' }} onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.08)'; }} onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(31, 38, 135, 0.05)'; }}>
                 <div className="stat-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div className="stat-icon purple" style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 20, color: 'white', background: '#7c3aed' }}><i className="fas fa-users"></i></div>
-                  <div className="stat-trend" style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><i className="fas fa-arrow-trend-up"></i> +12%</div>
+                  <div className="stat-icon purple" style={{ width: 48, height: 48, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '20px', color: 'white', background: 'linear-gradient(135deg, #a78bfa, #7c3aed)' }}><i className="fas fa-users"></i></div>
+                  <div className="stat-trend" style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px' }}><i className="fas fa-arrow-trend-up"></i> +12%</div>
                 </div>
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800, marginTop: 10 }}>1,284</div>
-                <div className="stat-label" style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Total Adhérents</div>
+                <div className="stat-value" style={{ fontSize: '32px', fontWeight: 800, marginTop: '12px', color: '#1e293b' }}>{loading ? '...' : (stats?.total_adherents || 0)}</div>
+                <div className="stat-label" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Total Adhérents</div>
               </div>
-              <div className="stat-card">
+              
+              {/* Card 2 */}
+              <div className="stat-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', transition: 'all 0.3s ease', cursor: 'pointer' }} onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.08)'; }} onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(31, 38, 135, 0.05)'; }}>
                 <div className="stat-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div className="stat-icon orange" style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 20, color: 'white', background: '#f97316' }}><i className="fas fa-clock"></i></div>
-                  <div className="stat-trend" style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><i className="fas fa-arrow-trend-up"></i> +5</div>
+                  <div className="stat-icon orange" style={{ width: 48, height: 48, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '20px', color: 'white', background: 'linear-gradient(135deg, #fb923c, #f97316)' }}><i className="fas fa-clock"></i></div>
+                  <div className="stat-trend" style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px' }}><i className="fas fa-arrow-trend-up"></i> +5</div>
                 </div>
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800, marginTop: 10 }}>23</div>
-                <div className="stat-label" style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Inscriptions en attente</div>
+                <div className="stat-value" style={{ fontSize: '32px', fontWeight: 800, marginTop: '12px', color: '#1e293b' }}>{loading ? '...' : (stats?.inscriptions_attente || 0)}</div>
+                <div className="stat-label" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Inscriptions en attente</div>
               </div>
-              <div className="stat-card">
+              
+              {/* Card 3 */}
+              <div className="stat-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', transition: 'all 0.3s ease', cursor: 'pointer' }} onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.08)'; }} onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(31, 38, 135, 0.05)'; }}>
                 <div className="stat-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div className="stat-icon green" style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 20, color: 'white', background: '#10b981' }}><i className="far fa-credit-card"></i></div>
-                  <div className="stat-trend" style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><i className="fas fa-arrow-trend-up"></i> +89</div>
+                  <div className="stat-icon green" style={{ width: 48, height: 48, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '20px', color: 'white', background: 'linear-gradient(135deg, #4ade80, #10b981)' }}><i className="far fa-credit-card"></i></div>
+                  <div className="stat-trend" style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px' }}><i className="fas fa-arrow-trend-up"></i> +89</div>
                 </div>
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800, marginTop: 10 }}>1,156</div>
-                <div className="stat-label" style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Cartes générées</div>
+                <div className="stat-value" style={{ fontSize: '32px', fontWeight: 800, marginTop: '12px', color: '#1e293b' }}>{loading ? '...' : (stats?.cartes_generees || 0)}</div>
+                <div className="stat-label" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Cartes générées</div>
               </div>
-              <div className="stat-card">
+              
+              {/* Card 4 */}
+              <div className="stat-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', transition: 'all 0.3s ease', cursor: 'pointer' }} onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.08)'; }} onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 8px 32px 0 rgba(31, 38, 135, 0.05)'; }}>
                 <div className="stat-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div className="stat-icon violet" style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', fontSize: 20, color: 'white', background: '#8b5cf6' }}><i className="fas fa-rotate"></i></div>
-                  <div className="stat-trend" style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 3 }}><i className="fas fa-arrow-trend-up"></i> +12</div>
+                  <div className="stat-icon violet" style={{ width: 48, height: 48, borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '20px', color: 'white', background: 'linear-gradient(135deg, #c084fc, #8b5cf6)' }}><i className="fas fa-rotate"></i></div>
+                  <div className="stat-trend" style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '3px' }}><i className="fas fa-arrow-trend-up"></i> +12</div>
                 </div>
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800, marginTop: 10 }}>45</div>
-                <div className="stat-label" style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Renouvellements</div>
+                <div className="stat-value" style={{ fontSize: '32px', fontWeight: 800, marginTop: '12px', color: '#1e293b' }}>{loading ? '...' : (stats?.renouvellements || 0)}</div>
+                <div className="stat-label" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Renouvellements</div>
               </div>
             </div>
 
-            <div className="section-card" style={{ background: 'white', borderRadius: 16, padding: 24, marginTop: 24, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 18px 0' }}>Activités récentes</h3>
-              <div className="activity-item admin-activity" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                <div className="activity-avatar blue-soft" style={{ width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: '#dbeafe', color: '#3b82f6' }}><i className="fas fa-user-plus"></i></div>
-                <div className="activity-info" style={{ flex: 1 }}>
-                  <div className="aname" style={{ fontSize: 14, fontWeight: 700 }}>Marie Martin</div>
-                  <div className="adesc" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500 }}>Nouvelle demande d'inscription</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginTop: '24px' }}>
+              {/* Colonne Gauche: Demandes d'inscription */}
+              <div className="section-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', margin: 0 }}>Demandes d'inscription récentes</h3>
+                  <button className="btn" style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontSize: '12px', fontWeight: 700, padding: '8px 16px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.2)', transition: 'all 0.2s' }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'none'} onClick={() => setActivePage('inscriptions')}>Voir tout</button>
                 </div>
-                <div className="activity-time" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Il y a 5 min</div>
+                
+                {loading ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>Chargement des demandes...</div>
+                ) : demandes.length > 0 ? (
+                  demandes.slice(0, 3).map((insc: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '14px 0', borderBottom: idx !== demandes.slice(0, 3).length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #e0e7ff, #c7d2fe)', color: '#4f46e5', flexShrink: 0, fontSize: '16px' }}><i className="fas fa-user"></i></div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>{insc.prenom_contact} {insc.nom_contact}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{insc.email_contact} · {insc.raison_sociale_entreprise || "Individuel"}</div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>{new Date(insc.date_demande).toLocaleDateString()}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>Aucune demande en attente.</div>
+                )}
               </div>
-              <div className="activity-item admin-activity" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                <div className="activity-avatar green-soft" style={{ width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: '#d1fae5', color: '#10b981' }}><i className="fas fa-circle-check"></i></div>
-                <div className="activity-info" style={{ flex: 1 }}>
-                  <div className="aname" style={{ fontSize: 14, fontWeight: 700 }}>Pierre Dubois</div>
-                  <div className="adesc" style={{ color: 'var(--success)', fontSize: 13, fontWeight: 500 }}>Inscription validée</div>
-                </div>
-                <div className="activity-time" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Il y a 12 min</div>
-              </div>
-              <div className="activity-item admin-activity" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                <div className="activity-avatar orange-soft" style={{ width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: '#ffedd5', color: '#f97316' }}><i className="far fa-credit-card"></i></div>
-                <div className="activity-info" style={{ flex: 1 }}>
-                  <div className="aname" style={{ fontSize: 14, fontWeight: 700 }}>Tech Solutions SAS</div>
-                  <div className="adesc" style={{ color: '#f97316', fontSize: 13, fontWeight: 500 }}>Carte générée</div>
-                </div>
-                <div className="activity-time" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Il y a 28 min</div>
-              </div>
-              <div className="activity-item admin-activity" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0' }}>
-                <div className="activity-avatar blue-soft" style={{ width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: '#dbeafe', color: '#3b82f6' }}><i className="fas fa-user"></i></div>
-                <div className="activity-info" style={{ flex: 1 }}>
-                  <div className="aname" style={{ fontSize: 14, fontWeight: 700 }}>Sophie Bernard</div>
-                  <div className="adesc" style={{ fontSize: 13, color: 'var(--primary)', fontWeight: 500 }}>Profil mis à jour</div>
-                </div>
-                <div className="activity-time" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Il y a 1h</div>
+
+              {/* Colonne Droite: Activités récentes */}
+              <div className="section-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Activités récentes</h3>
+                
+                {loading ? (
+                  <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>Chargement des activités...</div>
+                ) : stats?.activites_recentes?.length > 0 ? (
+                  stats.activites_recentes.map((act: any, idx: number) => (
+                    <div key={idx} className="activity-item admin-activity" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 0', borderBottom: idx !== stats.activites_recentes.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+                      <div className="activity-avatar blue-soft" style={{ width: 40, height: 40, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0, background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)', color: '#1d4ed8' }}><i className="fas fa-info-circle"></i></div>
+                      <div className="activity-info" style={{ flex: 1 }}>
+                        <div className="aname" style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{act.name}</div>
+                        <div className="adesc" style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>{act.desc}</div>
+                      </div>
+                      <div className="activity-time" style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>{act.time}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>Aucune activité récente.</div>
+                )}
               </div>
             </div>
           </div>
@@ -105,32 +682,32 @@ export default function AdminPage() {
 
             <div className="section-card" style={{ marginTop: 24, padding: 24, background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Demandes en attente <span className="admin-badge admin-badge-pending" style={{ marginLeft: 8, background: '#fef3c7', color: '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>23</span></h3>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>Demandes en attente <span className="admin-badge admin-badge-pending" style={{ marginLeft: 8, background: '#fef3c7', color: '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{loading ? '...' : (stats?.inscriptions_attente || 0)}</span></h3>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-outline" style={{ background: 'white', color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>Tout refuser</button>
-                  <button className="btn btn-primary">Tout valider</button>
+                  <button className="btn btn-primary" onClick={() => setShowNewInscModal(true)}>Nouvelle inscription</button>
                 </div>
               </div>
 
-              {[
-                { name: 'Marie Martin', email: 'marie.martin@email.com', type: 'Physique', time: '5 min', avatar: 'purple-soft', icon: 'fa-user' },
-                { name: 'Innova Group SARL', email: 'contact@innovagroup.fr', type: 'Moral', time: '2h', avatar: 'blue-soft', icon: 'fa-building' },
-                { name: 'Thomas Leroy', email: 't.leroy@mail.com', type: 'Physique', time: '5h', avatar: 'green-soft', icon: 'fa-user' },
-                { name: 'Céline Moreau', email: 'c.moreau@gmail.com', type: 'Physique', time: 'hier', avatar: 'orange-soft', icon: 'fa-user' },
-              ].map((insc, idx) => (
-                <div key={idx} className="insc-card" style={{ background: 'white', borderRadius: 14, padding: 20, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-                  <div className={`td-avatar ${insc.avatar}`} style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', ...getAvatarStyle(insc.avatar) }}><i className={`fas ${insc.icon}`}></i></div>
-                  <div className="insc-info" style={{ flex: 1 }}>
-                    <div className="iname" style={{ fontSize: 15, fontWeight: 800 }}>{insc.name}</div>
-                    <div className="imeta" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{insc.email} &nbsp;·&nbsp; {insc.type} &nbsp;·&nbsp; Soumis il y a {insc.time}</div>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>Chargement des données...</div>
+              ) : demandes.length > 0 ? (
+                demandes.map((insc, idx) => (
+                  <div key={idx} className="insc-card" style={{ background: 'white', borderRadius: 14, padding: 20, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+                    <div className={`td-avatar purple-soft`} style={{ width: 44, height: 44, flexShrink: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', ...getAvatarStyle('purple-soft') }}><i className={`fas fa-user`}></i></div>
+                    <div className="insc-info" style={{ flex: 1 }}>
+                      <div className="iname" style={{ fontSize: 15, fontWeight: 800 }}>{insc.prenom_contact} {insc.nom_contact}</div>
+                      <div className="imeta" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{insc.email_contact} &nbsp;·&nbsp; {insc.raison_sociale_entreprise || "Individuel"} &nbsp;·&nbsp; Soumis le {new Date(insc.date_demande).toLocaleDateString()}</div>
+                    </div>
+                    <div className="insc-actions" style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-danger" style={{ background: '#fee2e2', color: 'var(--danger)' }} onClick={() => handleRefuser(insc.id)}>Refuser</button>
+                      <button className="btn btn-success" style={{ background: '#d1fae5', color: 'var(--success)' }} onClick={() => handleValider(insc.id)}>Valider</button>
+                      <button className="btn btn-primary" onClick={() => { setSelectedDemande(insc); setShowVoirModal(true); }}>Voir</button>
+                    </div>
                   </div>
-                  <div className="insc-actions" style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-danger" style={{ background: '#fee2e2', color: 'var(--danger)' }}>Refuser</button>
-                    <button className="btn btn-success" style={{ background: '#d1fae5', color: 'var(--success)' }}>Valider</button>
-                    <button className="btn btn-primary">Voir</button>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>Aucune demande d'inscription en attente.</div>
+              )}
             </div>
           </div>
         )}
@@ -143,17 +720,23 @@ export default function AdminPage() {
               <h1>Adhérents</h1>
               <p>Gérer et rechercher les adhérents actifs</p>
             </div>
-            
+
             <div className="search-filter-row" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'white', borderRadius: 14, padding: '16px 20px', marginTop: 24, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
               <div className="search-box" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', borderRadius: 10, padding: '9px 14px' }}>
                 <i className="fas fa-search" style={{ color: 'var(--text-muted)' }}></i>
-                <input type="text" placeholder="Rechercher par nom, email..." style={{ border: 'none', background: 'none', outline: 'none', fontFamily: 'inherit', fontSize: 14, width: '100%' }} />
+                <input 
+                  type="text" 
+                  placeholder="Rechercher par nom, email, téléphone, CIN/ICE, référence..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ border: 'none', background: 'none', outline: 'none', fontFamily: 'inherit', fontSize: 14, width: '100%' }} 
+                />
               </div>
-              <button className="filter-btn active" style={activeTabStyle}>Tous</button>
-              <button className="filter-btn" style={inactiveTabStyle}><i className="fas fa-user"></i> Physique</button>
-              <button className="filter-btn" style={inactiveTabStyle}><i className="far fa-building"></i> Moral</button>
+              <button className="filter-btn" style={filterType === 'Tous' ? activeTabStyle : inactiveTabStyle} onClick={() => setFilterType('Tous')}>Tous</button>
+              <button className="filter-btn" style={filterType === 'Physique' ? activeTabStyle : inactiveTabStyle} onClick={() => setFilterType('Physique')}><i className="fas fa-user"></i> Physique</button>
+              <button className="filter-btn" style={filterType === 'Moral' ? activeTabStyle : inactiveTabStyle} onClick={() => setFilterType('Moral')}><i className="far fa-building"></i> Moral</button>
             </div>
-            <div className="results-count" style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 12, fontWeight: 600 }}>5 adhérents trouvés</div>
+            <div className="results-count" style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 12, fontWeight: 600 }}>{loading ? 'Recherche en cours...' : `${filteredAdherents.length} adhérent(s) trouvé(s)`}</div>
 
             <div className="data-table" style={{ background: 'white', borderRadius: 16, marginTop: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -169,35 +752,35 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { ref: 'ADH001', name: 'Jean Dupont', subName: '', type: 'Physique', email: 'jean.dupont@email.com', tel: '06 12 34 56 78', statut: 'Actif', depuis: '15/03/2023', avatar: 'purple-soft', icon: 'fa-user' },
-                    { ref: 'ADH002', name: 'Tech Solutions SAS', subName: 'Tech Solutions SAS', type: 'Moral', email: 'contact@techsolutions.fr', tel: '01 23 45 67 89', statut: 'Actif', depuis: '10/01/2024', avatar: 'blue-soft', icon: 'fa-building' },
-                    { ref: 'ADH003', name: 'Marie Martin', subName: '', type: 'Physique', email: 'marie.martin@email.com', tel: '07 98 76 54 32', statut: 'Actif', depuis: '20/06/2025', avatar: 'green-soft', icon: 'fa-user' },
-                  ].map((adh, idx) => (
+                  {loading ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', color: '#999' }}>Chargement des adhérents...</td></tr>
+                  ) : filteredAdherents.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', color: '#999' }}>Aucun adhérent ne correspond à votre recherche.</td></tr>
+                  ) : filteredAdherents.map((adh, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={tdStyle}><span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{adh.ref}</span></td>
+                      <td style={tdStyle}><span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{adh.reference}</span></td>
                       <td style={tdStyle}>
                         <div className="td-name" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                          <div className={`td-avatar ${adh.avatar}`} style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, ...getAvatarStyle(adh.avatar) }}><i className={`fas ${adh.icon}`}></i></div>
+                          <div className={`td-avatar blue-soft`} style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, ...getAvatarStyle('blue-soft') }}><i className={adh.type_adherent === 'Physique' ? 'fas fa-user' : 'fas fa-building'}></i></div>
                           <div>
-                            <div>{adh.name}</div>
-                            {adh.subName && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{adh.subName}</div>}
+                            <div>{adh.nom}</div>
+                            {adh.sub_nom && <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{adh.sub_nom}</div>}
                           </div>
                         </div>
                       </td>
-                      <td style={tdStyle}><span style={{ background: adh.type === 'Physique' ? '#dbeafe' : '#fef3c7', color: adh.type === 'Physique' ? '#3b82f6' : '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{adh.type}</span></td>
+                      <td style={tdStyle}><span style={{ background: adh.type_adherent === 'Physique' ? '#dbeafe' : '#fef3c7', color: adh.type_adherent === 'Physique' ? '#3b82f6' : '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{adh.type_adherent}</span></td>
                       <td style={tdStyle}>
                         <div style={{ fontSize: 13 }}>
                           <div><i className="far fa-envelope" style={{ color: 'var(--text-muted)', marginRight: 5 }}></i>{adh.email}</div>
-                          <div style={{ marginTop: 3 }}><i className="fas fa-phone" style={{ color: 'var(--text-muted)', marginRight: 5 }}></i>{adh.tel}</div>
+                          {adh.telephone && <div style={{ marginTop: 3 }}><i className="fas fa-phone" style={{ color: 'var(--text-muted)', marginRight: 5 }}></i>{adh.telephone}</div>}
                         </div>
                       </td>
-                      <td style={tdStyle}><span style={{ background: '#d1fae5', color: '#10b981', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{adh.statut}</span></td>
-                      <td style={tdStyle}><span style={{ fontSize: 13 }}>{adh.depuis}</span></td>
+                      <td style={tdStyle}><span style={{ background: adh.statut === 'Actif' ? '#d1fae5' : '#fef3c7', color: adh.statut === 'Actif' ? '#10b981' : '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{adh.statut}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: 13 }}>{new Date(adh.date_adhesion).toLocaleDateString()}</span></td>
                       <td style={tdStyle}>
                         <div className="td-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <button className="icon-btn edit" style={iconBtnStyle('#dbeafe', '#3b82f6')}><i className="fas fa-pen"></i></button>
-                          <button className="icon-btn del" style={iconBtnStyle('#fee2e2', '#ef4444')}><i className="fas fa-trash"></i></button>
+                          <button className="icon-btn edit" style={iconBtnStyle('#dbeafe', '#3b82f6')} onClick={() => setEditingAdherent(adh)}><i className="fas fa-pen"></i></button>
+                          <button className="icon-btn del" style={iconBtnStyle('#fee2e2', '#ef4444')} onClick={() => handleDeleteAdherent(adh.id)}><i className="fas fa-trash"></i></button>
                         </div>
                       </td>
                     </tr>
@@ -210,135 +793,1286 @@ export default function AdminPage() {
 
         {/* CARTES */}
         {activePage === 'cartes' && (
-           <div className="page-content animation-fade-in">
-             <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-               <div className="page-title">
-                 <h1>Cartes d'adhérent</h1>
-                 <p>Gérer et générer les cartes d'adhésion</p>
-               </div>
-               <button className="btn btn-primary" style={{ marginTop: 8 }}><i className="far fa-credit-card" style={{ marginRight: 6 }}></i>Générer une carte</button>
-             </div>
+          <div className="page-content animation-fade-in">
+            <div className="page-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div className="page-title">
+                <h1>Cartes d'adhérent</h1>
+                <p>Gérer les cartes d'adhésion</p>
+              </div>
+              <div className="header-actions" style={{ display: 'flex', gap: 12 }}>
+                <div className="search-bar" style={{ display: 'flex', alignItems: 'center', background: 'white', padding: '8px 16px', borderRadius: 999, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid var(--border)' }}>
+                  <i className="fas fa-search" style={{ color: '#999', marginRight: 10 }}></i>
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher une carte..." 
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, width: 250 }}
+                    value={cartesSearchQuery}
+                    onChange={(e) => setCartesSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
 
-             <div className="cartes-grid admin-cartes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 22, marginTop: 24 }}>
-               {[
-                 { name: 'Jean Dupont', img: 'blue-grad', badge: 'Physique', id: '2026-PP-001284', emit: '15/01/2026', exp: '15/01/2027', icon: 'fa-user' },
-                 { name: 'Tech Solutions SAS', img: 'pink-grad', badge: 'Moral', id: '2026-PM-000567', emit: '10/02/2026', exp: '10/02/2027', icon: 'fa-building' },
-                 { name: 'Marie Martin', img: 'indigo-grad', badge: 'Physique', id: '2025-PP-001156', emit: '20/06/2025', exp: '20/06/2026', icon: 'fa-user' }
-               ].map((c, idx) => (
-                 <div key={idx} className="carte-card" style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflow: 'hidden' }}>
-                   <div className={`carte-visual ${c.img}`} style={{ height: 130, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, position: 'relative', background: getGradient(c.img) }}>
-                     <div className="cv-icon" style={{ width: 36, height: 36, background: 'rgba(255,255,255,.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16 }}><i className={`fas ${c.icon}`}></i></div>
-                     <div className="cv-badge" style={{ background: 'rgba(255,255,255,.25)', color: 'white', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>{c.badge}</div>
-                     <div className="cv-name" style={{ position: 'absolute', bottom: 14, left: 18, color: 'white' }}>
-                       <div className="cn" style={{ fontSize: 16, fontWeight: 800 }}>{c.name}</div>
-                       <div className="cid" style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>{c.id}</div>
-                     </div>
-                   </div>
-                   <div className="carte-details" style={{ padding: '16px 18px' }}>
-                     <div className="carte-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Émission</span><span style={{ fontWeight: 700 }}>{c.emit}</span></div>
-                     <div className="carte-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Expiration</span><span style={{ fontWeight: 700 }}>{c.exp}</span></div>
-                     <div className="carte-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Statut</span><span style={{ background: '#d1fae5', color: '#10b981', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>Active</span></div>
-                   </div>
-                   <div className="carte-footer" style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-                     <button className="btn btn-outline" style={{ flex: 1, fontSize: 12, background: 'white', color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>Télécharger</button>
-                     <button className="btn btn-primary" style={{ flex: 1, fontSize: 12 }}>Renouveler</button>
-                   </div>
-                 </div>
-               ))}
-             </div>
-           </div>
+            <div className="cartes-grid admin-cartes-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'flex-start' }}>
+              {loading ? (
+                <div style={{ color: '#999', padding: 20 }}>Chargement des cartes...</div>
+              ) : filteredCartes.length === 0 ? (
+                <div style={{ color: '#999', padding: 20 }}>Aucune carte trouvée.</div>
+              ) : filteredCartes.map((c: any, idx: number) => {
+                const isActive = c.statut?.toLowerCase() === 'active';
+                const numStr = c.numero_carte || '';
+                const shortNum = numStr.includes('-') ? numStr.split('-').pop() : numStr;
+                const anneeEmission = c.date_emission ? new Date(c.date_emission).getFullYear() : new Date().getFullYear();
+                const displayNum = `N° : ${shortNum}/${anneeEmission}`;
+                const moisFr = ['JAN','FÉV','MAR','AVR','MAI','JUN','JUL','AOÛ','SEP','OCT','NOV','DÉC'];
+                const validite = c.date_expiration
+                  ? `${moisFr[new Date(c.date_expiration).getMonth()]} ${new Date(c.date_expiration).getFullYear()}`
+                  : '—';
+                const nomAffiche = (c.nom || c.nom_adherent || '').toUpperCase().trim();
+                const prenomAffiche = (c.prenom || '').trim();
+                const profAffiche = (c.profession || 'COMMERCANT').toUpperCase();
+
+                return (
+                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                  {/* ══════════════════════════════════════════
+                      CCS — CARTE PROFESSIONNELLE
+                      Dimensions : 340 × 215 px ≈ ratio carte ID
+                      ══════════════════════════════════════════ */}
+                  <div id={`carte-${c.id}`} style={{
+                    width: 340,
+                    height: 215,
+                    fontFamily: '"Arial", "Helvetica Neue", sans-serif',
+                    border: '1.5px solid #c8b89a',
+                    borderRadius: 7,
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 18px rgba(0,0,0,.22)',
+                    flexShrink: 0,
+                    userSelect: 'none',
+                    position: 'relative',
+                  }}>
+                    {/* Image de fond pour forcer l'impression */}
+                    <img src="/carte_background.png" alt="Fond Carte" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
+
+                    {/* Nom */}
+                    <div style={{ position: 'absolute', top: '75px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {nomAffiche}
+                    </div>
+                    
+                    {/* Prénom */}
+                    <div style={{ position: 'absolute', top: '95px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {prenomAffiche}
+                    </div>
+                    
+                    {/* Profession */}
+                    <div style={{ position: 'absolute', top: '115px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {profAffiche}
+                    </div>
+                    
+                    {/* Patente */}
+                    <div style={{ position: 'absolute', top: '135px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {c.numero_patente || ''}
+                    </div>
+                    
+                    {/* R.C */}
+                    <div style={{ position: 'absolute', top: '155px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {c.rc || ''}
+                    </div>
+                    
+                    {/* Validité */}
+                    <div style={{ position: 'absolute', top: '175px', left: '150px', padding: '0 4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {validite}
+                    </div>
+                    
+                    {/* Numéro de carte */}
+                    <div style={{ position: 'absolute', bottom: '10px', left: '10px', padding: '2px 6px', fontSize: '10px', fontWeight: 'bold' }}>
+                      {displayNum}
+                    </div>
+
+                    {/* Photo */}
+                    <div style={{ position: 'absolute', top: '80px', left: '28px', width: '60px', height: '78px', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '4px' }}>
+                      {c.photo_path ? (
+                        <img src={`http://localhost:8000${c.photo_path}`} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontSize: '10px', color: '#64748b' }}>Photo</span>
+                      )}
+                    </div>
+
+
+                  </div>
+
+                    {/* Deuxième face (Verso) */}
+                    <div id={`carte-back-${c.id}`} style={{
+                      display: 'none',
+                      width: 340,
+                      height: 215,
+                      fontFamily: '"Arial", "Helvetica Neue", sans-serif',
+                      border: '1.5px solid #c8b89a',
+                      borderRadius: 7,
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 18px rgba(0,0,0,.22)',
+                      flexShrink: 0,
+                      userSelect: 'none',
+                      position: 'relative',
+                      marginTop: 10,
+                    }}>
+                      <img src="/carte_back.png" alt="Fond Carte Verso" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} />
+                    </div>
+                  {/* ─────────────────────────────── */}
+
+                  {/* Contrôles sous la carte */}
+                  <div style={{ display: 'flex', gap: 8, width: 340 }}>
+                    <span style={{
+                      background: isActive ? '#d1fae5' : '#fee2e2',
+                      color: isActive ? '#10b981' : '#ef4444',
+                      padding: '3px 10px', borderRadius: 999,
+                      fontSize: 11, fontWeight: 700,
+                      textTransform: 'capitalize', alignSelf: 'center',
+                    }}>{c.statut}</span>
+                    <div style={{ flex: 1 }} />
+                    <button className="btn btn-secondary"
+                      style={{ fontSize: 11, padding: '5px 14px' }}
+                      onClick={() => handlePrint(`carte-${c.id}`, `carte-back-${c.id}`)}>
+                      <i className="fas fa-print" style={{ marginRight: 5 }}></i>Imprimer
+                    </button>
+                    {(() => {
+                      const diffDays = c.date_expiration
+                        ? Math.ceil((new Date(c.date_expiration).getTime() - Date.now()) / 86400000)
+                        : 999;
+                      const canRenew = diffDays <= 30 && c.statut !== 'renouvelee';
+                      return (
+                        <button className="btn btn-primary"
+                          style={{ fontSize: 11, padding: '5px 14px', opacity: canRenew ? 1 : 0.42, cursor: canRenew ? 'pointer' : 'not-allowed' }}
+                          onClick={() => canRenew && handleRenouveler(c.id)}
+                          title={canRenew ? 'Renouveler la carte' : 'Renouvellement possible 30j avant expiration'}>
+                          <i className="fas fa-sync-alt" style={{ marginRight: 5 }}></i>Renouveler
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )})}
+            </div>
+          </div>
         )}
 
         {/* COMMUNICATIONS */}
         {activePage === 'communications' && (
-           <div className="page-content animation-fade-in">
-             <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-               <div className="page-title">
-                 <h1>Communications</h1>
-                 <p>Envoyer des messages aux adhérents</p>
-               </div>
-               <button className="btn btn-primary" style={{ marginTop: 8 }}><i className="fas fa-plus" style={{ marginRight: 6 }}></i>Nouvelle communication</button>
-             </div>
+          <div className="page-content animation-fade-in">
+            <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div className="page-title">
+                <h1>Communications</h1>
+                <p>Envoyer des messages aux adhérents</p>
+              </div>
+              <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setShowCommModal(true)}>
+                <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Nouvelle communication
+              </button>
+            </div>
 
-             <div className="section-card" style={{ marginTop: 24, padding: 24, background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
-               <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 18px 0' }}>Historique des communications</h3>
+            <div className="section-card" style={{ marginTop: 24, padding: 24, background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 18px 0' }}>Historique des communications</h3>
 
-               {[
-                 { title: "Rappel de renouvellement d'adhésion", meta: "Email · Envoyé à 1,156 adhérents · Taux d'ouverture: 68%", date: "15/04/2026", type: "email", icon: "fa-envelope", bg: "#dbeafe", color: "#3b82f6" },
-                 { title: "Confirmation d'inscription - Pierre Dubois", meta: "SMS · Envoyé à 1 adhérent · Livré", date: "12/01/2026", type: "sms", icon: "fa-comment-sms", bg: "#d1fae5", color: "#10b981" },
-                 { title: "Assemblée Générale 2026 - Convocation", meta: "Notification · Envoyé à tous les adhérents · Taux de lecture: 82%", date: "05/01/2026", type: "notif", icon: "fa-bell", bg: "#ede9fe", color: "#8b5cf6" },
-               ].map((comm, idx) => (
-                 <div key={idx} className="comm-card" style={{ background: 'white', borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 16, border: '1px solid var(--border)' }}>
-                   <div className="comm-icon" style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: comm.bg, color: comm.color }}><i className={`far ${comm.icon}`}></i></div>
-                   <div className="comm-info" style={{ flex: 1 }}>
-                     <div className="ctitle" style={{ fontSize: 15, fontWeight: 700 }}>{comm.title}</div>
-                     <div className="cmeta" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{comm.meta}</div>
-                   </div>
-                   <div className="comm-date" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{comm.date}</div>
-                 </div>
-               ))}
-             </div>
-           </div>
+              {communications.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)' }}>Aucune communication envoyée pour le moment.</p>
+              ) : (
+                communications.map((comm, idx) => {
+                  const date = new Date(comm.date_envoi).toLocaleDateString('fr-FR');
+                  const isWhatsapp = ['whatsapp', 'watsp'].includes(comm.canal.toLowerCase());
+                  const icon = comm.canal.toLowerCase() === 'email' ? 'fa-envelope' : isWhatsapp ? 'fa-whatsapp' : 'fa-bell';
+                  const bg = comm.canal.toLowerCase() === 'email' ? '#dbeafe' : isWhatsapp ? '#d1fae5' : '#ede9fe';
+                  const color = comm.canal.toLowerCase() === 'email' ? '#3b82f6' : isWhatsapp ? '#10b981' : '#8b5cf6';
+                  
+                  return (
+                    <div key={comm.id} className="comm-card" style={{ background: 'white', borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 16, border: '1px solid var(--border)' }}>
+                      <div className="comm-icon" style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: bg, color: color }}>
+                        <i className={isWhatsapp ? `fab ${icon}` : `far ${icon}`}></i>
+                      </div>
+                      <div className="comm-info" style={{ flex: 1 }}>
+                        <div className="ctitle" style={{ fontSize: 15, fontWeight: 700 }}>{comm.titre}</div>
+                        <div className="cmeta" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                          {comm.canal} · Envoyé à {comm.nombre_destinataires} destinataires {comm.statut_ou_metrique ? `· ${comm.statut_ou_metrique}` : ''}
+                        </div>
+                      </div>
+                      <div className="comm-date" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{date}</div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         )}
 
         {/* DOCUMENTS */}
         {activePage === 'documents' && (
-           <div className="page-content animation-fade-in">
-             <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-               <div className="page-title">
-                 <h1>Documents</h1>
-                 <p>Gérer les documents accessibles aux adhérents</p>
-               </div>
-               <button className="btn btn-primary" style={{ marginTop: 8 }}><i className="fas fa-upload" style={{ marginRight: 6 }}></i>Téléverser un document</button>
-             </div>
+          <div className="page-content animation-fade-in">
+            <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div className="page-title">
+                <h1>Documents</h1>
+                <p>Gérer les documents accessibles aux adhérents</p>
+              </div>
+              <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setShowDocModal(true)}><i className="fas fa-upload" style={{ marginRight: 6 }}></i>Téléverser un document</button>
+            </div>
 
-             <div className="data-table" style={{ background: 'white', borderRadius: 16, marginTop: 24, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
-               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                 <thead>
-                   <tr>
-                     <th style={thStyle}>Nom du document</th>
-                     <th style={thStyle}>Catégorie</th>
-                     <th style={thStyle}>Taille</th>
-                     <th style={thStyle}>Date d'ajout</th>
-                     <th style={thStyle}>Ajouté par</th>
-                     <th style={thStyle}>Actions</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {[
-                     { name: 'Règlement intérieur 2026.pdf', cat: 'Règlements', catBg: '#fef3c7', catColor: '#b45309', size: '245 KB', date: '10/01/2026', by: 'Admin Système' },
-                     { name: 'Formulaire adhésion.pdf', cat: 'Formulaires', catBg: '#d1fae5', catColor: '#065f46', size: '128 KB', date: '15/01/2026', by: 'Admin Système' },
-                     { name: 'Compte-rendu AG 2025.pdf', cat: 'Comptes-rendus', catBg: '#dbeafe', catColor: '#1e40af', size: '1.2 MB', date: '20/12/2025', by: 'Secrétaire' },
-                   ].map((doc, idx) => (
-                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                       <td style={tdStyle}><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div className="doc-icon" style={{ width: 34, height: 34, background: '#dbeafe', color: '#3b82f6', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}><i className="fas fa-file-pdf"></i></div><span style={{ fontWeight: 700 }}>{doc.name}</span></div></td>
-                       <td style={tdStyle}><span style={{ background: doc.catBg, color: doc.catColor, fontSize: 11, padding: '3px 10px', borderRadius: 999, fontWeight: 700 }}>{doc.cat}</span></td>
-                       <td style={tdStyle}><span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{doc.size}</span></td>
-                       <td style={tdStyle}><span style={{ fontSize: 13, color: 'var(--primary)' }}>{doc.date}</span></td>
-                       <td style={tdStyle}><span style={{ fontSize: 13 }}>{doc.by}</span></td>
-                       <td style={tdStyle}>
-                         <div className="td-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                           <button className="icon-btn view-btn" style={iconBtnStyle('#ede9fe', 'var(--primary)')}><i className="fas fa-eye"></i></button>
-                           <button className="icon-btn dl" style={iconBtnStyle('#d1fae5', '#10b981')}><i className="fas fa-download"></i></button>
-                           <button className="icon-btn del" style={iconBtnStyle('#fee2e2', '#ef4444')}><i className="fas fa-trash"></i></button>
-                         </div>
-                       </td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </div>
-           </div>
+            <div className="data-table" style={{ background: 'white', borderRadius: 16, marginTop: 24, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Nom du document</th>
+                    <th style={thStyle}>Catégorie</th>
+                    <th style={thStyle}>Taille</th>
+                    <th style={thStyle}>Date d'ajout</th>
+                    <th style={thStyle}>Ajouté par</th>
+                    <th style={thStyle}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {globalDocuments.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20, color: '#999' }}>Aucun document.</td></tr>
+                  ) : globalDocuments.map((doc, idx) => {
+                    const catBg = doc.categorie === 'Règlements' ? '#fef3c7' : doc.categorie === 'Formulaires' ? '#d1fae5' : '#dbeafe';
+                    const catColor = doc.categorie === 'Règlements' ? '#b45309' : doc.categorie === 'Formulaires' ? '#065f46' : '#1e40af';
+                    return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={tdStyle}><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div className="doc-icon" style={{ width: 34, height: 34, background: '#dbeafe', color: '#3b82f6', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}><i className="fas fa-file-pdf"></i></div><span style={{ fontWeight: 700 }}>{doc.nom_fichier}</span></div></td>
+                      <td style={tdStyle}><span style={{ background: catBg, color: catColor, fontSize: 11, padding: '3px 10px', borderRadius: 999, fontWeight: 700 }}>{doc.categorie}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{doc.taille}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: 13, color: 'var(--primary)' }}>{new Date(doc.date_importation).toLocaleDateString('fr-FR')}</span></td>
+                      <td style={tdStyle}><span style={{ fontSize: 13 }}>{doc.ajoute_par || 'Admin Système'}</span></td>
+                      <td style={tdStyle}>
+                        <div className="td-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <a href={`http://localhost:8000${doc.chemin_fichier}`} target="_blank" rel="noreferrer" className="icon-btn view-btn" style={iconBtnStyle('#ede9fe', 'var(--primary)')}><i className="fas fa-eye"></i></a>
+                          <a href={`http://localhost:8000${doc.chemin_fichier}`} download className="icon-btn dl" style={iconBtnStyle('#d1fae5', '#10b981')}><i className="fas fa-download"></i></a>
+                          <button className="icon-btn del" style={iconBtnStyle('#fee2e2', '#ef4444')} onClick={() => handleDeleteDocument(doc.id)}><i className="fas fa-trash"></i></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ÉVÉNEMENTS */}
+        {activePage === 'evenements' && (
+          <div className="page-content animation-fade-in" style={{ background: 'linear-gradient(135deg, #f6f8fb 0%, #e9eef5 100%)', minHeight: '100%', padding: '24px', borderRadius: '20px' }}>
+            <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div className="page-title">
+                <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}>Événements</h1>
+                <p style={{ fontSize: '14px', color: '#64748b' }}>Gérer les événements et les lieux</p>
+              </div>
+              <button className="btn" style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 700, padding: '10px 20px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.2)', transition: 'all 0.2s', marginTop: 8 }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'none'} onClick={() => setShowEventModal(true)}>
+                <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Nouvel événement
+              </button>
+            </div>
+
+            <div className="section-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', marginTop: 24 }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Liste des événements</h3>
+
+              {evenements.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <div style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '16px' }}><i className="fas fa-calendar-times"></i></div>
+                  <p style={{ fontSize: '16px', fontWeight: 600 }}>Aucun événement trouvé.</p>
+                  <p style={{ fontSize: '14px', color: '#94a3b8' }}>Cliquez sur "Nouvel événement" pour en ajouter un.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+                  {evenements.map((evt, idx) => (
+                    <div key={evt.id} style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <span style={{ background: '#e0e7ff', color: '#4f46e5', fontSize: '11px', padding: '4px 10px', borderRadius: '999px', fontWeight: 700 }}>Événement</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }} onClick={() => setEditingEvent(evt)}><i className="fas fa-pen"></i></button>
+                          <button style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => handleDeleteEvent(evt.id)}><i className="fas fa-trash"></i></button>
+                        </div>
+                      </div>
+                      <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', margin: 0 }}>{evt.titre}</h4>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: '#4f46e5', margin: '4px 0 0 0' }}>{evt.categorie || 'Général'}</p>
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>{evt.description || 'Pas de description.'}</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: 'auto', fontSize: '12px', color: '#64748b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <i className="far fa-calendar-alt" style={{ width: '14px', color: '#94a3b8' }}></i>
+                          <span>{new Date(evt.date_evenement).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <i className="far fa-clock" style={{ width: '14px', color: '#94a3b8' }}></i>
+                          <span>Début: {evt.heure_debut || 'Non spécifiée'} | Fin: {evt.heure_fin || 'Non spécifiée'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <i className="fas fa-map-marker-alt" style={{ width: '14px', color: '#94a3b8' }}></i>
+                          <span>Lieu: {evt.lieu || 'Non spécifié'}</span>
+                        </div>
+                        {evt.places_limitees && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <i className="fas fa-users" style={{ width: '14px', color: '#94a3b8' }}></i>
+                            <span>{evt.places_limitees} places limitées</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* RENOUVELLEMENTS */}
+        {activePage === 'renouvellements' && (
+          <div className="page-content animation-fade-in" style={{ background: 'linear-gradient(135deg, #f6f8fb 0%, #e9eef5 100%)', minHeight: '100%', padding: '24px', borderRadius: '20px' }}>
+            <div className="page-title">
+              <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}>Renouvellements</h1>
+              <p style={{ fontSize: '14px', color: '#64748b' }}>Gérer les demandes de renouvellement d'adhésion</p>
+            </div>
+
+            <div className="section-card" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.05)', border: '1px solid rgba(255, 255, 255, 0.6)', marginTop: 24 }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Demandes en attente</h3>
+
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Chargement des demandes...</div>
+              ) : renouvellements.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <div style={{ fontSize: '48px', color: '#cbd5e1', marginBottom: '16px' }}><i className="fas fa-check-circle"></i></div>
+                  <p style={{ fontSize: '16px', fontWeight: 600 }}>Aucune demande en attente.</p>
+                  <p style={{ fontSize: '14px', color: '#94a3b8' }}>Tous les renouvellements ont été traités.</p>
+                </div>
+              ) : (
+                <div className="data-table" style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Adhérent</th>
+                        <th style={thStyle}>Année</th>
+                        <th style={thStyle}>Montant</th>
+                        <th style={thStyle}>Mode Paiement</th>
+                        <th style={thStyle}>Date Demande</th>
+                        <th style={thStyle}>Preuve</th>
+                        <th style={thStyle}>Statut</th>
+                        <th style={thStyle}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {renouvellements.map((r, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={tdStyle}>
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>{r.nom_adherent}</div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>{r.email_adherent}</div>
+                          </td>
+                          <td style={tdStyle}>{r.annee}</td>
+                          <td style={tdStyle}><span style={{ fontWeight: 700, color: '#10b981' }}>{r.montant} MAD</span></td>
+                          <td style={tdStyle}>
+                            <span style={{ fontSize: 13, background: '#f1f5f9', padding: '4px 10px', borderRadius: 8, fontWeight: 600 }}>
+                              {r.mode_paiement}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>{r.date_paiement ? new Date(r.date_paiement).toLocaleDateString() : '—'}</td>
+                          <td style={tdStyle}>
+                            {r.preuve_paiement ? (
+                              <a 
+                                href={`http://localhost:8000${r.preuve_paiement}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+                              >
+                                <i className="fas fa-eye"></i> Voir
+                              </a>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: 12 }}>Aucune</span>
+                            )}
+
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+                              {r.statut}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>
+                            <button 
+                              className="btn btn-success" 
+                              style={{ background: '#d1fae5', color: '#059669', fontSize: 12, fontWeight: 700, padding: '6px 14px' }}
+                              onClick={() => handleApprouverRenouvellement(r.id)}
+                            >
+                              Approuver
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION: FINANCES */}
+        {/* SECTION: FINANCES */}
+        {activePage === 'finances' && (
+          <div className="page-content animation-fade-in" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div className="page-title">
+                <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}>Finances</h1>
+                <p style={{ fontSize: '14px', color: '#64748b' }}>Journal des revenus, dépenses et fournisseurs</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontWeight: 700, padding: '10px 18px' }} onClick={() => setShowFournisseurModal(true)}>
+                  <i className="fas fa-truck" style={{ marginRight: 6 }}></i>Nouveau Fournisseur
+                </button>
+                <button className="btn btn-primary" style={{ borderRadius: 10, fontSize: 13, fontWeight: 700, padding: '10px 18px' }} onClick={() => setShowDepenseModal(true)}>
+                  <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Enregistrer une Dépense
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 32, background: '#f1f5f9', padding: 4, borderRadius: 12, width: 'fit-content' }}>
+              <button onClick={() => setFinanceTab('revenus')} style={financeTab === 'revenus' ? activeTabStyle : inactiveTabStyle}>Revenus (Adhésions)</button>
+              <button onClick={() => setFinanceTab('depenses')} style={financeTab === 'depenses' ? activeTabStyle : inactiveTabStyle}>Dépenses</button>
+              <button onClick={() => setFinanceTab('fournisseurs')} style={financeTab === 'fournisseurs' ? activeTabStyle : inactiveTabStyle}>Fournisseurs</button>
+            </div>
+
+            {/* STATS FINANCIÈRES */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
+              <div className="stat-card" style={{ background: '#ecfdf5', borderRadius: 16, padding: 20, border: '1px solid #10b98122' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', textTransform: 'uppercase' }}>Total Revenus</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#064e3b', marginTop: 8 }}>
+                  {renouvellements.reduce((acc, r) => acc + (r.statut === 'Approuvé' ? r.montant : 0), 0).toLocaleString()} MAD
+                </div>
+              </div>
+              <div className="stat-card" style={{ background: '#fff1f2', borderRadius: 16, padding: 20, border: '1px solid #f43f5e22' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#e11d48', textTransform: 'uppercase' }}>Total Dépenses</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#881337', marginTop: 8 }}>
+                  {depenses.reduce((acc, d) => acc + d.montant, 0).toLocaleString()} MAD
+                </div>
+              </div>
+              <div className="stat-card" style={{ background: '#eff6ff', borderRadius: 16, padding: 20, border: '1px solid #3b82f622' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Solde Net</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#1e3a8a', marginTop: 8 }}>
+                  {(renouvellements.reduce((acc, r) => acc + (r.statut === 'Approuvé' ? r.montant : 0), 0) - depenses.reduce((acc, d) => acc + d.montant, 0)).toLocaleString()} MAD
+                </div>
+              </div>
+              <div className="stat-card" style={{ background: '#fef3c7', borderRadius: 16, padding: 20, border: '1px solid #d9770622' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#d97706', textTransform: 'uppercase' }}>Virements en attente</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#78350f', marginTop: 8 }}>
+                  {renouvellements.filter(r => r.mode_paiement === 'virement' && r.statut === 'en attente').length}
+                </div>
+              </div>
+            </div>
+
+            {financeTab === 'revenus' && (
+              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
+                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Journal des Adhésions</h3>
+                <div className="data-table">
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Date</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Adhérent</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Mode</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Montant</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Documents</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Statut</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {renouvellements.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={tdStyle}>{new Date(r.date_paiement).toLocaleDateString()}</td>
+                          <td style={tdStyle}>{r.nom_adherent || 'Inconnu'}</td>
+                          <td style={tdStyle}><span style={{ padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: '#f1f5f9' }}>{r.mode_paiement.toUpperCase()}</span></td>
+                          <td style={tdStyle}><span style={{ fontWeight: 700 }}>{r.montant} MAD</span></td>
+                          <td style={tdStyle}>
+                            {r.preuve_paiement ? (
+                              <a href={`http://localhost:8000${r.preuve_paiement}`} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: 12, fontWeight: 700 }}>👁️ Voir Preuve</a>
+                            ) : '—'}
+                          </td>
+                          <td style={tdStyle}>
+                            {r.documents && r.documents.length > 0 ? (
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {r.documents.map((d: any, idx: number) => (
+                                  <a key={idx} href={`http://localhost:8000${d.url}`} target="_blank" rel="noreferrer" title={d.type} style={{ textDecoration: 'none', fontSize: 14 }}>
+                                    {d.type === 'Photo' ? '👤' : '📄'}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : '—'}
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{ 
+                              padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, 
+                              background: r.statut === 'validé' ? '#d1fae5' : (r.statut === 'refuser' ? '#fee2e2' : '#fef3c7'), 
+                              color: r.statut === 'validé' ? '#065f46' : (r.statut === 'refuser' ? '#991b1b' : '#92400e') 
+                            }}>
+                              {r.statut.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>
+                            {r.statut !== 'validé' && r.statut !== 'refuser' && (
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button 
+                                  onClick={() => handleApprouverRenouvellement(r.id)} 
+                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#10b981', color: 'white', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  {r.statut === 'attente_docs' ? 'Approuver Docs' : 'Valider Paiement'}
+                                </button>
+                                <button 
+                                  onClick={() => handleRefuserRenouvellement(r.id)} 
+                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#ef4444', color: 'white', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  Refuser
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {financeTab === 'depenses' && (
+              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
+                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Journal des Dépenses</h3>
+                <div className="data-table">
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Date</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Titre</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Catégorie</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Fournisseur</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Montant</th>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Mode</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {depenses.length === 0 ? (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Aucune dépense enregistrée.</td></tr>
+                      ) : depenses.map((d, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={tdStyle}>{new Date(d.date_depense).toLocaleDateString()}</td>
+                          <td style={tdStyle}><span style={{ fontWeight: 600 }}>{d.titre}</span></td>
+                          <td style={tdStyle}><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, background: '#fef3c7', color: '#d97706', fontWeight: 700 }}>{d.categorie}</span></td>
+                          <td style={tdStyle}>{fournisseurs.find(f => f.id === d.fournisseur_id)?.nom || '—'}</td>
+                          <td style={tdStyle}><span style={{ fontWeight: 800, color: '#e11d48' }}>-{d.montant} MAD</span></td>
+                          <td style={tdStyle}>{d.mode_paiement}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {financeTab === 'fournisseurs' && (
+              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
+                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Liste des Fournisseurs</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+                  {fournisseurs.length === 0 ? (
+                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#94a3b8' }}>Aucun fournisseur enregistré.</div>
+                  ) : fournisseurs.map((f, i) => (
+                    <div key={i} style={{ padding: 20, borderRadius: 16, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', marginBottom: 4 }}>{f.nom}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6', marginBottom: 12, textTransform: 'uppercase' }}>{f.type_service}</div>
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+                          <i className="fas fa-user" style={{ width: 14 }}></i> {f.contact_nom || '—'}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+                          <i className="fas fa-phone" style={{ width: 14 }}></i> {f.telephone || '—'}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+                          <i className="fas fa-envelope" style={{ width: 14 }}></i> {f.email || '—'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </main>
-    </>
-  );
+
+      {/* MODAL VOIR */}
+      {showVoirModal && selectedDemande && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 16, width: '100%', maxWidth: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Détails de la demande</h3>
+              <button onClick={() => setShowVoirModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#666' }}>&times;</button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Nom & Prénom</span>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.prenom_contact} {selectedDemande.nom_contact}</span>
+              </div>
+              <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Email</span>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.email_contact}</span>
+              </div>
+              <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Téléphone</span>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.telephone_contact || 'Non renseigné'}</span>
+              </div>
+              <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Raison sociale (Si entreprise)</span>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.raison_sociale_entreprise || 'N/A'}</span>
+              </div>
+              {selectedDemande.cin && (
+                <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>CIN</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.cin}</span>
+                </div>
+              )}
+              {selectedDemande.date_naissance && (
+                <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Date de naissance</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.date_naissance}</span>
+                </div>
+              )}
+              {selectedDemande.profession && (
+                <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Profession</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.profession}</span>
+                </div>
+              )}
+              {selectedDemande.numero_patente && (
+                <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 8 }}>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>N° Patente</span>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{selectedDemande.numero_patente}</span>
+                </div>
+              )}
+
+              {/* Documents */}
+              <div style={{ marginTop: 8 }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: 14, fontWeight: 700 }}>Documents importés</h4>
+                {selectedDemande.documents ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {(() => {
+                      try {
+                        const docs = JSON.parse(selectedDemande.documents);
+                        if (typeof docs === 'object' && docs !== null && !Array.isArray(docs)) {
+                          return Object.entries(docs).map(([docName, url]) => (
+                            <div key={docName} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px' }}>
+                              <i className="fas fa-file-pdf" style={{ color: '#e53e3e', fontSize: 16 }}></i>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>{docName}</span>
+                              <a href={`http://localhost:8000${url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fas fa-eye"></i> Voir
+                              </a>
+                              <a href={`http://localhost:8000${url}`} download style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fas fa-download"></i>
+                              </a>
+                            </div>
+                          ));
+                        }
+                        // Array format
+                        if (Array.isArray(docs)) {
+                          return docs.map((doc: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px' }}>
+                              <i className="fas fa-file-pdf" style={{ color: '#e53e3e', fontSize: 16 }}></i>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>{doc.nom || doc.name || `Document ${i+1}`}</span>
+                              {doc.url && <a href={`http://localhost:8000${doc.url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}><i className="fas fa-eye"></i> Voir</a>}
+                            </div>
+                          ));
+                        }
+                      } catch(e) {}
+                      return <div style={{ fontSize: 13, color: '#3b82f6', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><i className="fas fa-file-pdf"></i> Document joint</div>;
+                    })()}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: '#999', padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>Aucun document importé.</div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+              <button className="btn btn-outline" onClick={() => setShowVoirModal(false)}>Fermer</button>
+              <button className="btn btn-success" onClick={() => { handleValider(selectedDemande.id); setShowVoirModal(false); }}>Valider l'inscription</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CREDENTIALS après validation */}
+      {credentials && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: 32, maxWidth: 440, width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, background: '#d1fae5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>
+              <i className="fas fa-check" style={{ color: '#10b981' }}></i>
+            </div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: '#1e293b' }}>Inscription validée !</h3>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#64748b' }}>Les identifiants ont été générés. Communiquez-les à l&apos;adhérent.</p>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', textAlign: 'left', marginBottom: 20 }}>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Email</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', fontFamily: 'monospace', background: '#e0f2fe', padding: '6px 12px', borderRadius: 8 }}>{credentials.email}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Mot de passe</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: credentials.password ? '#1e293b' : '#94a3b8', fontFamily: 'monospace', background: credentials.password ? '#fef3c7' : '#f1f5f9', padding: '6px 12px', borderRadius: 8 }}>
+                  {credentials.password || '(Compte existant — mot de passe inchangé)'}
+                </div>
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>⚠️ Notez le mot de passe, il ne sera plus affiché.</p>
+            <button onClick={() => setCredentials(null)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: 10, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Fermer</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NOUVELLE INSCRIPTION */}
+      {showNewInscModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 1000, maxHeight: '95vh', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', position: 'relative' }}>
+            <button onClick={() => setShowNewInscModal(false)} style={{ position: 'absolute', top: 24, right: 24, background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999', zIndex: 50 }}>&times;</button>
+            <InscriptionForm />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MODIFIER ADHERENT */}
+      {editingAdherent && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 600, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Modifier l'Adhérent ({editingAdherent.reference})</h3>
+              <button onClick={() => setEditingAdherent(null)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
+            </div>
+            
+            <form onSubmit={handleUpdateAdherent} style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom ou Raison sociale *</label>
+                <input type="text" required value={editingAdherent.nom} onChange={e => setEditingAdherent({ ...editingAdherent, nom: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Email *</label>
+                <input type="email" required value={editingAdherent.email} onChange={e => setEditingAdherent({ ...editingAdherent, email: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mot de passe</label>
+                <input type="text" readOnly value={editingAdherent.mot_de_passe || 'Non généré'} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: '#f8fafc', color: '#64748b' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Téléphone</label>
+                <input type="tel" value={editingAdherent.telephone || ''} onChange={e => setEditingAdherent({ ...editingAdherent, telephone: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>ICE / CIN</label>
+                <input type="text" value={editingAdherent.ice || ''} onChange={e => setEditingAdherent({ ...editingAdherent, ice: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Numéro de Patente</label>
+                <input type="text" value={editingAdherent.numero_patente || ''} onChange={e => setEditingAdherent({ ...editingAdherent, numero_patente: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Statut</label>
+                <select value={editingAdherent.statut} onChange={e => setEditingAdherent({ ...editingAdherent, statut: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                  <option value="Actif">Actif</option>
+                  <option value="En attente">En attente</option>
+                  <option value="Refusé">Refusé</option>
+                </select>
+              </div>
+
+              {/* Documents */}
+              {editingAdherent.documents && editingAdherent.documents.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Documents rattachés</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {editingAdherent.documents.map((doc: any, idx: number) => (
+                      <a href={`http://localhost:8000${doc.chemin_fichier}`} target="_blank" rel="noreferrer" key={idx} style={{ background: '#dbeafe', color: '#3b82f6', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', border: '1px solid #bfdbfe', transition: '.2s' }}>
+                        <i className="fas fa-file-pdf"></i>
+                        {doc.nom_fichier}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingAdherent(null)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Enregistrer les modifications</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NOUVELLE COMMUNICATION */}
+      {showCommModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 600, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Nouvelle communication</h3>
+              <button onClick={() => setShowCommModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
+            </div>
+            
+            <form onSubmit={handleSubmitCommunication} style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Titre *</label>
+                <input type="text" required value={commForm.titre} onChange={e => setCommForm({ ...commForm, titre: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Objet de l'email ou titre de la notification" />
+              </div>
+
+              <div className="grid-2">
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Canal *</label>
+                  <select required value={commForm.canal} onChange={e => setCommForm({ ...commForm, canal: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                    <option value="Email">Email</option>
+                    <option value="Notification">Notification Push (App)</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Cible *</label>
+                  <select required value={commForm.cible} onChange={e => setCommForm({ ...commForm, cible: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                    <option value="tous">Tous les adhérents</option>
+                    <option value="partie">Une partie des adhérents</option>
+                    <option value="evenement">Adhérents inscrits à un événement</option>
+                  </select>
+                </div>
+              </div>
+
+              {commForm.cible === 'evenement' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Sélectionner l'événement *</label>
+                  <select required value={commForm.evenement_id} onChange={e => setCommForm({ ...commForm, evenement_id: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                    <option value="">-- Choisir un événement --</option>
+                    {evenements.map((ev: any) => (
+                      <option key={ev.id} value={ev.id}>{ev.titre} ({new Date(ev.date_evenement).toLocaleDateString('fr-FR')})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {commForm.cible === 'partie' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Sélectionner les adhérents ({commForm.adherent_ids.length} sélectionnés) *</label>
+                  <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    {adherents.map((adh: any) => (
+                      <label key={adh.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, cursor: 'pointer' }}>
+                        <input type="checkbox" 
+                               checked={commForm.adherent_ids.includes(adh.id)} 
+                               onChange={(e) => {
+                                 if (e.target.checked) {
+                                   setCommForm({ ...commForm, adherent_ids: [...commForm.adherent_ids, adh.id] });
+                                 } else {
+                                   setCommForm({ ...commForm, adherent_ids: commForm.adherent_ids.filter(id => id !== adh.id) });
+                                 }
+                               }} />
+                        <span style={{ fontSize: 13 }}>{adh.nom || adh.raison_sociale} ({adh.reference})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Contenu *</label>
+                <textarea required value={commForm.contenu} onChange={e => setCommForm({ ...commForm, contenu: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, minHeight: 120, resize: 'vertical', fontFamily: 'inherit' }} placeholder="Votre message..." />
+              </div>
+
+              {commForm.canal === 'Email' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Pièce jointe (Optionnel)</label>
+                  <input 
+                    type="file" 
+                    onChange={e => setCommForm({ ...commForm, file: e.target.files ? e.target.files[0] : null })} 
+                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed var(--border)', fontSize: 13, background: '#f8fafc' }} 
+                  />
+                  {commForm.file && <div style={{ fontSize: 11, color: '#10b981', marginTop: 4, fontWeight: 600 }}>📎 {commForm.file.name} prêt à être envoyé</div>}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowCommModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary"><i className="fas fa-paper-plane" style={{ marginRight: 6 }}></i>Envoyer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CENTRE D'ENVOI WHATSAPP */}
+      {showWhatsappModal && (
+        <div className="modal-backdrop animation-fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,.4)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="modal-content animation-slide-up" style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 500, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
+            <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#e8f5e9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ background: '#25D366', color: 'white', borderRadius: '50%', width: 36, height: 36, display: 'grid', placeItems: 'center', fontSize: 20 }}>
+                  <i className="fab fa-whatsapp"></i>
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#1b5e20' }}>Centre d'envoi WhatsApp</h2>
+                  <span style={{ fontSize: 12, color: '#2e7d32', fontWeight: 600 }}>{sentWhatsappIds.length} / {whatsappQueue.length} envoyés</span>
+                </div>
+              </div>
+              <button className="icon-btn" onClick={() => setShowWhatsappModal(false)} style={{ background: 'transparent', border: 'none', color: '#2e7d32', fontSize: 20, cursor: 'pointer' }}><i className="fas fa-times"></i></button>
+            </div>
+            
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 380, overflowY: 'auto' }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Pour garantir la réception sans frais d'API, cliquez sur <strong>Envoyer</strong> pour chaque adhérent afin d'ouvrir le message pré-rempli dans WhatsApp Web :
+              </p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {whatsappQueue.map((item: any, idx: number) => {
+                  const isSent = sentWhatsappIds.includes(item.telephone);
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border)', background: isSent ? '#f1fdf5' : 'white', transition: 'all 0.2s' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: isSent ? '#2e7d32' : 'var(--text)' }}>{item.nom}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.telephone}</span>
+                      </div>
+                      <a 
+                        href={item.link} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        onClick={() => {
+                          if (!isSent) {
+                            setSentWhatsappIds([...sentWhatsappIds, item.telephone]);
+                          }
+                        }}
+                        className="btn"
+                        style={{ 
+                          padding: '6px 14px', 
+                          borderRadius: 8, 
+                          background: isSent ? '#e8f5e9' : '#25D366', 
+                          color: isSent ? '#2e7d32' : 'white', 
+                          fontWeight: 600, 
+                          fontSize: 13,
+                          border: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          textDecoration: 'none',
+                          boxShadow: isSent ? 'none' : '0 2px 4px rgba(37, 211, 102, 0.2)'
+                        }}
+                      >
+                        {isSent ? (
+                          <>
+                            <i className="fas fa-check"></i>
+                            Relancer
+                          </>
+                        ) : (
+                          <>
+                            <i className="fab fa-whatsapp"></i>
+                            Envoyer
+                          </>
+                        )}
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: '#f8fafc' }}>
+              <button className="btn btn-primary" onClick={() => setShowWhatsappModal(false)} style={{ background: '#2e7d32', borderColor: '#2e7d32' }}>Terminer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TÉLÉVERSER DOCUMENT */}
+      {showDocModal && (
+        <div className="modal-backdrop animation-fade-in" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,.4)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="modal-content animation-slide-up" style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1)', overflow: 'hidden' }}>
+            <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Téléverser un document</h2>
+              <button className="icon-btn" onClick={() => setShowDocModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}><i className="fas fa-times"></i></button>
+            </div>
+            
+            <form onSubmit={handleDocumentSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom du document *</label>
+                <input type="text" required value={docForm.nom_fichier} onChange={e => setDocForm({ ...docForm, nom_fichier: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Ex: Règlement intérieur 2026.pdf" />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Catégorie *</label>
+                <select required value={docForm.categorie} onChange={e => setDocForm({ ...docForm, categorie: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                  <option value="Règlements">Règlements</option>
+                  <option value="Formulaires">Formulaires</option>
+                  <option value="Comptes-rendus">Comptes-rendus</option>
+                  <option value="Autre">Autre</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Fichier *</label>
+                <input type="file" required onChange={e => setDocForm({ ...docForm, file: e.target.files ? e.target.files[0] : null })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed var(--border)', fontSize: 13 }} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowDocModal(false)} disabled={uploadingDoc}>Annuler</button>
+                <button type="submit" className="btn btn-primary" disabled={uploadingDoc}>
+                  {uploadingDoc ? 'Téléversement...' : <><i className="fas fa-upload" style={{ marginRight: 6 }}></i>Téléverser</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AJOUT ÉVÉNEMENT */}
+      {showEventModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 16, width: '100%', maxWidth: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Ajouter un événement</h3>
+              <button onClick={() => setShowEventModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#666' }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleEventSubmit}>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Titre</label>
+                  <input type="text" required value={eventForm.titre} onChange={e => setEventForm({ ...eventForm, titre: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Date</label>
+                  <input type="date" required value={eventForm.date_evenement} onChange={e => setEventForm({ ...eventForm, date_evenement: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Heure début</label>
+                    <input type="time" value={eventForm.heure_debut} onChange={e => setEventForm({ ...eventForm, heure_debut: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Heure fin</label>
+                    <input type="time" value={eventForm.heure_fin} onChange={e => setEventForm({ ...eventForm, heure_fin: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Catégorie</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select value={eventForm.categorie} onChange={e => setEventForm({ ...eventForm, categorie: e.target.value })} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }}>
+                      <option value="Séminaire">Séminaire</option>
+                      <option value="Journée d'information">Journée d'information</option>
+                      <option value="Salon">Salon</option>
+                      <option value="Conférence">Conférence</option>
+                      {eventForm.categorie && !['Séminaire', "Journée d'information", 'Salon', 'Conférence'].includes(eventForm.categorie) && (
+                        <option value={eventForm.categorie}>{eventForm.categorie}</option>
+                      )}
+                    </select>
+                    <button type="button" onClick={() => {
+                      const newCat = prompt("Entrez la nouvelle catégorie :");
+                      if (newCat) setEventForm({ ...eventForm, categorie: newCat });
+                    }} style={{ padding: '0 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#f8fafc', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Lieu</label>
+                  <input type="text" value={eventForm.lieu} onChange={e => setEventForm({ ...eventForm, lieu: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Description</label>
+                  <textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, minHeight: '60px' }}></textarea>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Places limitées</label>
+                  <input type="number" value={eventForm.places_limitees} onChange={e => setEventForm({ ...eventForm, places_limitees: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowEventModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Créer l'événement</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MODIFIER ÉVÉNEMENT */}
+      {editingEvent && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 16, width: '100%', maxWidth: 500, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Modifier l'événement</h3>
+              <button onClick={() => setEditingEvent(null)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#666' }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleEditEventSubmit}>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Titre</label>
+                  <input type="text" required value={editingEvent.titre} onChange={e => setEditingEvent({ ...editingEvent, titre: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Date</label>
+                  <input type="date" required value={editingEvent.date_evenement} onChange={e => setEditingEvent({ ...editingEvent, date_evenement: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Heure début</label>
+                    <input type="time" value={editingEvent.heure_debut || ''} onChange={e => setEditingEvent({ ...editingEvent, heure_debut: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Heure fin</label>
+                    <input type="time" value={editingEvent.heure_fin || ''} onChange={e => setEditingEvent({ ...editingEvent, heure_fin: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Catégorie</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select value={editingEvent.categorie || 'Conférence'} onChange={e => setEditingEvent({ ...editingEvent, categorie: e.target.value })} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }}>
+                      <option value="Séminaire">Séminaire</option>
+                      <option value="Journée d'information">Journée d'information</option>
+                      <option value="Salon">Salon</option>
+                      <option value="Conférence">Conférence</option>
+                      {editingEvent.categorie && !['Séminaire', "Journée d'information", 'Salon', 'Conférence'].includes(editingEvent.categorie) && (
+                        <option value={editingEvent.categorie}>{editingEvent.categorie}</option>
+                      )}
+                    </select>
+                    <button type="button" onClick={() => {
+                      const newCat = prompt("Entrez la nouvelle catégorie :");
+                      if (newCat) setEditingEvent({ ...editingEvent, categorie: newCat });
+                    }} style={{ padding: '0 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#f8fafc', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Lieu</label>
+                  <input type="text" value={editingEvent.lieu || ''} onChange={e => setEditingEvent({ ...editingEvent, lieu: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Description</label>
+                  <textarea value={editingEvent.description || ''} onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, minHeight: '60px' }}></textarea>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>Places limitées</label>
+                  <input type="number" value={editingEvent.places_limitees || ''} onChange={e => setEditingEvent({ ...editingEvent, places_limitees: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13 }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingEvent(null)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NOUVELLE DÉPENSE */}
+      {showDepenseModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 450, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Enregistrer une dépense</h3>
+              <button onClick={() => setShowDepenseModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
+            </div>
+            <form onSubmit={handleDepenseSubmit} style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Titre / Objet *</label>
+                <input type="text" required value={depenseForm.titre} onChange={e => setDepenseForm({ ...depenseForm, titre: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Ex: Impression flyers" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Montant (MAD) *</label>
+                  <input type="number" required value={depenseForm.montant} onChange={e => setDepenseForm({ ...depenseForm, montant: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Catégorie *</label>
+                  <select value={depenseForm.categorie} onChange={e => setDepenseForm({ ...depenseForm, categorie: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                    <option value="Administratif">Administratif</option>
+                    <option value="Événement">Événement</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Logistique">Logistique</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Fournisseur</label>
+                <select value={depenseForm.fournisseur_id} onChange={e => setDepenseForm({ ...depenseForm, fournisseur_id: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                  <option value="">-- Aucun --</option>
+                  {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mode de paiement</label>
+                <select value={depenseForm.mode_paiement} onChange={e => setDepenseForm({ ...depenseForm, mode_paiement: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
+                  <option value="Virement">Virement</option>
+                  <option value="Chèque">Chèque</option>
+                  <option value="Espèces">Espèces</option>
+                  <option value="Carte">Carte</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowDepenseModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NOUVEAU FOURNISSEUR */}
+      {showFournisseurModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Nouveau fournisseur</h3>
+              <button onClick={() => setShowFournisseurModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
+            </div>
+            <form onSubmit={handleFournisseurSubmit} style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom du fournisseur *</label>
+                <input type="text" required value={fournisseurForm.nom} onChange={e => setFournisseurForm({ ...fournisseurForm, nom: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom du contact</label>
+                  <input type="text" value={fournisseurForm.contact_nom} onChange={e => setFournisseurForm({ ...fournisseurForm, contact_nom: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Type de service</label>
+                  <input type="text" value={fournisseurForm.type_service} onChange={e => setFournisseurForm({ ...fournisseurForm, type_service: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Ex: Traiteur" />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Email</label>
+                  <input type="email" value={fournisseurForm.email} onChange={e => setFournisseurForm({ ...fournisseurForm, email: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Téléphone</label>
+                  <input type="tel" value={fournisseurForm.telephone} onChange={e => setFournisseurForm({ ...fournisseurForm, telephone: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Adresse</label>
+                <textarea value={fournisseurForm.adresse} onChange={e => setFournisseurForm({ ...fournisseurForm, adresse: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, minHeight: 60 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowFournisseurModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Ajouter</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <datalist id="categories-list">
+      <option value="Séminaire" />
+      <option value="Journée d'information" />
+      <option value="Salon" />
+      <option value="Conférence" />
+      {Array.from(new Set(evenements.map(e => e.categorie).filter(Boolean))).map(cat => (
+        <option key={cat} value={cat} />
+      ))}
+    </datalist>
+  </>
+);
 }
 
 // Helpers styles
 const thStyle = { padding: '14px 18px', textAlign: 'left' as const, fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', background: 'var(--bg)', borderBottom: '1px solid var(--border)' };
 const tdStyle = { padding: '14px 18px', fontSize: 14, verticalAlign: 'middle' as const };
-const inactiveTabStyle = { padding: '9px 18px', borderRadius: 10, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, border: '1.5px solid var(--border)', background: 'white', cursor: 'pointer', color: 'var(--text-muted)', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 6 };
+const inactiveTabStyle = { padding: '9px 18px', borderRadius: 10, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, borderWidth: '1.5px', borderStyle: 'solid', borderColor: 'var(--border)', background: 'white', cursor: 'pointer', color: 'var(--text-muted)', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 6 };
 const activeTabStyle = { ...inactiveTabStyle, background: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' };
 
 function getAvatarStyle(type: string) {

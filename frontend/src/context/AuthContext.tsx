@@ -10,6 +10,11 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   initials: string;
+  adherent_id?: number;
+  reference?: string;
+  statut?: string;
+  photo_url?: string;
+  type_adherent?: string;
 }
 
 interface AuthContextValue {
@@ -17,6 +22,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
+  updateUser: (data: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -49,8 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      // 1. On appelle l'API Python FastAPI
-      const response = await fetch('http://127.0.0.1:8000/login', {
+      // 1. On appelle l'API via le proxy Next.js (évite les erreurs CORS)
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,11 +77,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const generatedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
       const generatedInitials = generatedName.substring(0, 2).toUpperCase();
 
+      // 3.5 Correction : Si le backend renvoie 'adherent', on le mappe sur 'member' pour le frontend
+      let finalRole = data.user.role;
+      if (finalRole === 'adherent') {
+        finalRole = 'member';
+      }
+
+      // Fetch real adherent data from backend using the secure /api/adherents/me endpoint
+      let adherentData = null;
+      try {
+        const meRes = await fetch('/api/adherents/me', {
+          headers: {
+            'Authorization': `Bearer ${data.token}`
+          }
+        });
+        if (meRes.ok) {
+          adherentData = await meRes.json();
+        }
+      } catch (e) {
+        console.warn("Could not fetch adherent data", e);
+      }
+
       const userData: AuthUser = {
         email: data.user.email,
-        role: data.user.role as UserRole,
-        name: generatedName,
+        role: finalRole as UserRole,
+        name: adherentData?.nom || generatedName,
         initials: generatedInitials,
+        adherent_id: adherentData?.id,
+        reference: adherentData?.reference,
+        statut: adherentData?.statut,
+        photo_url: adherentData?.photo_url,
+        type_adherent: adherentData?.type_adherent,
       };
 
       // 4. Mettre à jour l'état React
@@ -87,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // AJOUT : Sauvegarder dans les cookies pour le Middleware (Redirection instantanée)
       document.cookie = `ga_auth_token=${data.token}; path=/; max-age=7200; SameSite=Lax`;
-      document.cookie = `ga_auth_role=${data.user.role}; path=/; max-age=7200; SameSite=Lax`;
+      document.cookie = `ga_auth_role=${finalRole}; path=/; max-age=7200; SameSite=Lax`;
 
       return { ok: true };
 
@@ -109,8 +141,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   }, [router]);
 
+  const updateUser = useCallback((data: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const newUser = { ...prev, ...data };
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
+      return newUser;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

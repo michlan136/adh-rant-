@@ -13,4 +13,6 @@ export type AdminPageId =
   | 'adherents'
   | 'cartes'
   | 'communications'
-  | 'documents';
+  | 'documents'
+  | 'evenements'
+  | 'renouvellements';
