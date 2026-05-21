@@ -15,4 +15,5 @@ export type AdminPageId =
   | 'communications'
   | 'documents'
   | 'evenements'
-  | 'renouvellements';
+  | 'renouvellements'
+  | 'finances';

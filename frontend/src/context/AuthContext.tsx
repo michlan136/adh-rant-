@@ -19,6 +19,7 @@ export interface AuthUser {
   adresse?: string;
   date_adhesion?: string;
   numero_patente?: string;
+  rc?: string;
   ice?: string;
 }
 
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         adresse: adherentData?.adresse,
         date_adhesion: adherentData?.date_adhesion,
         numero_patente: adherentData?.numero_patente,
+        rc: adherentData?.rc,
         ice: adherentData?.ice,
       };
 

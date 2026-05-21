@@ -1,3 +1,5 @@
+import logging
+logging.basicConfig(level=logging.DEBUG)
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,7 +47,7 @@ from .core.security import create_access_token
 from .api import endpoints_admin, finance, communication as communication_api
 
 # Création des tables dans la base de données
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ADH-RANT API")
 
@@ -69,7 +71,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

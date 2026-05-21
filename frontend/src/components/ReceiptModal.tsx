@@ -91,11 +91,11 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
           </div>
         </div>
 
-        <div id="receipt-content" style={{ padding: 48, overflowY: 'auto' }}>
+      <div id="receipt-content" style={{ padding: 48, overflowY: 'auto' }}>
           <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 60 }}>
             <div className="logo-section">
               <h1 style={{ margin: 0, color: '#1e1b4b', fontSize: 28, letterSpacing: 1 }}>ADH-RANT</h1>
-              <p style={{ margin: '4px 0 0', color: '#64748b', font_size: 14 }}>Portail Membre Officiel</p>
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Portail Membre Officiel</p>
             </div>
             <div className="title-section" style={{ textAlign: 'right' }}>
               <h2 style={{ margin: 0, color: '#1e1b4b', fontSize: 20, fontWeight: 800 }}>REÇU DE PAIEMENT</h2>
@@ -126,7 +126,7 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
             <tbody>
               <tr>
                 <td style={{ padding: '20px 0', borderBottom: '1px solid #eee' }}>
-                  <h4 style={{ margin: 0, font_size: 15, color: '#1e293b' }}>Renouvellement d'adhésion annuelle</h4>
+                  <h4 style={{ margin: 0, fontSize: 15, color: '#1e293b' }}>Renouvellement d'adhésion annuelle</h4>
                   <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>Période {data.annee} - {data.annee + 1}</p>
                 </td>
                 <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #eee' }}>{data.montant} MAD</td>
