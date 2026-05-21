@@ -42,7 +42,7 @@ from .core.security import create_access_token
 from .api import endpoints_admin, finance
 
 # Création des tables dans la base de données
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ADH-RANT API")
 
