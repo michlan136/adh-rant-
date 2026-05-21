@@ -17,7 +17,10 @@ export interface AuthUser {
   type_adherent?: string;
   telephone?: string; // 👈 Ajouté pour la page Carte
   adresse?: string;
-  date_adhesion?: string;// 👈 Ajouté pour la page Carte
+  date_adhesion?: string;
+  numero_patente?: string; // 👈 L'erreur actuelle
+  rc?: string;             // 👈 L'erreur qu'on évite (Registre de Commerce)
+  ice?: string;// 👈 Ajouté pour la page Carte
 }
 
 interface AuthContextValue {
