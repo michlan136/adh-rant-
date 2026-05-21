@@ -15,6 +15,11 @@ export interface AuthUser {
   statut?: string;
   photo_url?: string;
   type_adherent?: string;
+  telephone?: string;
+  adresse?: string;
+  date_adhesion?: string;
+  numero_patente?: string;
+  ice?: string;
 }
 
 interface AuthContextValue {
@@ -108,6 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         statut: adherentData?.statut,
         photo_url: adherentData?.photo_url,
         type_adherent: adherentData?.type_adherent,
+        telephone: adherentData?.telephone,
+        adresse: adherentData?.adresse,
+        date_adhesion: adherentData?.date_adhesion,
+        numero_patente: adherentData?.numero_patente,
+        ice: adherentData?.ice,
       };
 
       // 4. Mettre à jour l'état React

@@ -86,7 +86,7 @@ export default function InscriptionForm() {
         if (file) {
           const fd = new FormData();
           fd.append('file', file);
-          const upRes = await fetch('http://localhost:8000/api/admin/upload-doc', {
+          const upRes = await fetch('/api/admin/upload-doc', {
             method: 'POST',
             body: fd
           });

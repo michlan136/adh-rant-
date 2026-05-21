@@ -6,6 +6,7 @@ import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminTopbar from '@/components/admin/AdminTopbar';
 import { fetchWithAuth } from '@/lib/api';
 import InscriptionForm from '@/components/admin/InscriptionForm';
+import WhatsAppBroadcastForm from '@/components/admin/WhatsAppBroadcastForm';
 
 export default function AdminPage() {
   const [activePage, setActivePage] = useState<AdminPageId>('dashboard');
@@ -58,6 +59,8 @@ export default function AdminPage() {
   const [whatsappQueue, setWhatsappQueue] = useState<any[]>([]);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
   const [sentWhatsappIds, setSentWhatsappIds] = useState<string[]>([]);
+  // Sous-onglet Communications : 'historique' | 'whatsapp' | 'autre'
+  const [commSubTab, setCommSubTab] = useState<'historique' | 'whatsapp'>('historique');
 
   // Nouveaux états pour Documents
   const [globalDocuments, setGlobalDocuments] = useState<any[]>([]);
@@ -68,14 +71,6 @@ export default function AdminPage() {
   // Modal credentials après validation
   const [credentials, setCredentials] = useState<{ email: string; password: string | null } | null>(null);
 
-  // Nouveaux états Finances
-  const [financeTab, setFinanceTab] = useState<'revenus' | 'depenses' | 'fournisseurs'>('revenus');
-  const [depenses, setDepenses] = useState<any[]>([]);
-  const [fournisseurs, setFournisseurs] = useState<any[]>([]);
-  const [showDepenseModal, setShowDepenseModal] = useState(false);
-  const [showFournisseurModal, setShowFournisseurModal] = useState(false);
-  const [depenseForm, setDepenseForm] = useState({ titre: '', montant: '', categorie: 'Administratif', mode_paiement: 'Virement', fournisseur_id: '', commentaire: '' });
-  const [fournisseurForm, setFournisseurForm] = useState({ nom: '', contact_nom: '', email: '', telephone: '', adresse: '', type_service: '' });
 
   const handleRefuser = async (id: number) => {
     if (!confirm('Êtes-vous sûr de vouloir refuser cette inscription ?')) return;
@@ -282,7 +277,7 @@ export default function AdminPage() {
       // 1. Upload file
       const formData = new FormData();
       formData.append('file', docForm.file);
-      const uploadRes = await fetch('http://localhost:8000/api/admin/upload-doc', {
+      const uploadRes = await fetch('/api/admin/upload-doc', {
         method: 'POST',
         body: formData,
       });
@@ -296,7 +291,7 @@ export default function AdminPage() {
       docFormData.append('categorie', docForm.categorie);
       docFormData.append('taille', (docForm.file.size / 1024).toFixed(1) + ' KB');
       
-      const res = await fetch('http://localhost:8000/api/admin/documents', {
+      const res = await fetch('/api/admin/documents', {
         method: 'POST',
         body: docFormData,
       });
@@ -441,48 +436,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleDepenseSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...depenseForm,
-        montant: parseFloat(depenseForm.montant),
-        fournisseur_id: depenseForm.fournisseur_id ? parseInt(depenseForm.fournisseur_id) : null
-      };
-      await fetchWithAuth('/api/finance/depenses', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      alert('Dépense enregistrée !');
-      setShowDepenseModal(false);
-      setDepenseForm({ titre: '', montant: '', categorie: 'Administratif', mode_paiement: 'Virement', fournisseur_id: '', commentaire: '' });
-      // Refresh
-      const d = await fetchWithAuth('/api/finance/depenses');
-      setDepenses(d);
-    } catch (err) {
-      console.error(err);
-      alert("Erreur lors de l'enregistrement de la dépense");
-    }
-  };
-
-  const handleFournisseurSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await fetchWithAuth('/api/finance/fournisseurs', {
-        method: 'POST',
-        body: JSON.stringify(fournisseurForm)
-      });
-      alert('Fournisseur ajouté !');
-      setShowFournisseurModal(false);
-      setFournisseurForm({ nom: '', contact_nom: '', email: '', telephone: '', adresse: '', type_service: '' });
-      // Refresh
-      const f = await fetchWithAuth('/api/finance/fournisseurs');
-      setFournisseurs(f);
-    } catch (err) {
-      console.error(err);
-      alert("Erreur lors de l'ajout du fournisseur");
-    }
-  };
 
   useEffect(() => {
     async function loadData() {
@@ -527,14 +480,7 @@ export default function AdminPage() {
           const rens = await fetchWithAuth('/api/admin/renouvellements');
           setRenouvellements(rens);
         }
-        if (activePage === 'finances') {
-          const rens = await fetchWithAuth('/api/admin/renouvellements');
-          setRenouvellements(rens);
-          const f = await fetchWithAuth('/api/finance/fournisseurs');
-          setFournisseurs(f);
-          const d = await fetchWithAuth('/api/finance/depenses');
-          setDepenses(d);
-        }
+
       } catch (err) {
         console.error("Erreur de chargement", err);
       } finally {
@@ -892,7 +838,7 @@ export default function AdminPage() {
                     {/* Photo */}
                     <div style={{ position: 'absolute', top: '80px', left: '28px', width: '60px', height: '78px', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '4px' }}>
                       {c.photo_path ? (
-                        <img src={`http://localhost:8000${c.photo_path}`} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={`https://adh-rant.onrender.com${c.photo_path}`} alt="Photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <span style={{ fontSize: '10px', color: '#64748b' }}>Photo</span>
                       )}
@@ -959,46 +905,119 @@ export default function AdminPage() {
         {/* COMMUNICATIONS */}
         {activePage === 'communications' && (
           <div className="page-content animation-fade-in">
+            {/* En-tête */}
             <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div className="page-title">
                 <h1>Communications</h1>
-                <p>Envoyer des messages aux adhérents</p>
+                <p>Gérez l'historique et envoyez des messages à vos adhérents</p>
               </div>
               <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setShowCommModal(true)}>
-                <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Nouvelle communication
+                <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Email / Notification
               </button>
             </div>
 
-            <div className="section-card" style={{ marginTop: 24, padding: 24, background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 18px 0' }}>Historique des communications</h3>
-
-              {communications.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>Aucune communication envoyée pour le moment.</p>
-              ) : (
-                communications.map((comm, idx) => {
-                  const date = new Date(comm.date_envoi).toLocaleDateString('fr-FR');
-                  const isWhatsapp = ['whatsapp', 'watsp'].includes(comm.canal.toLowerCase());
-                  const icon = comm.canal.toLowerCase() === 'email' ? 'fa-envelope' : isWhatsapp ? 'fa-whatsapp' : 'fa-bell';
-                  const bg = comm.canal.toLowerCase() === 'email' ? '#dbeafe' : isWhatsapp ? '#d1fae5' : '#ede9fe';
-                  const color = comm.canal.toLowerCase() === 'email' ? '#3b82f6' : isWhatsapp ? '#10b981' : '#8b5cf6';
-                  
-                  return (
-                    <div key={comm.id} className="comm-card" style={{ background: 'white', borderRadius: 14, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 16, border: '1px solid var(--border)' }}>
-                      <div className="comm-icon" style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: bg, color: color }}>
-                        <i className={isWhatsapp ? `fab ${icon}` : `far ${icon}`}></i>
-                      </div>
-                      <div className="comm-info" style={{ flex: 1 }}>
-                        <div className="ctitle" style={{ fontSize: 15, fontWeight: 700 }}>{comm.titre}</div>
-                        <div className="cmeta" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                          {comm.canal} · Envoyé à {comm.nombre_destinataires} destinataires {comm.statut_ou_metrique ? `· ${comm.statut_ou_metrique}` : ''}
-                        </div>
-                      </div>
-                      <div className="comm-date" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{date}</div>
-                    </div>
-                  );
-                })
-              )}
+            {/* Barre d'onglets */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                background: '#f1f5f9',
+                borderRadius: 12,
+                padding: 4,
+                marginTop: 20,
+                width: 'fit-content',
+              }}
+            >
+              {([
+                { key: 'historique', label: '📋 Historique', id: 'comm-tab-historique' },
+                { key: 'whatsapp',   label: '📲 WhatsApp en masse', id: 'comm-tab-whatsapp' },
+              ] as { key: 'historique' | 'whatsapp'; label: string; id: string }[]).map((tab) => (
+                <button
+                  key={tab.key}
+                  id={tab.id}
+                  onClick={() => setCommSubTab(tab.key)}
+                  style={{
+                    padding: '9px 20px',
+                    borderRadius: 9,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: commSubTab === tab.key ? 700 : 500,
+                    background: commSubTab === tab.key ? 'white' : 'transparent',
+                    color: commSubTab === tab.key ? '#1e293b' : '#64748b',
+                    boxShadow: commSubTab === tab.key ? '0 1px 6px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.18s',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
+
+            {/* ── Onglet Historique ── */}
+            {commSubTab === 'historique' && (
+              <div className="section-card" style={{ marginTop: 20, padding: 24, background: 'white', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+                <h3 style={{ fontSize: 17, fontWeight: 800, margin: '0 0 18px 0' }}>Historique des communications</h3>
+
+                {communications.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+                    <p style={{ margin: 0, fontWeight: 600 }}>Aucune communication envoyée pour le moment.</p>
+                  </div>
+                ) : (
+                  communications.map((comm) => {
+                    const date = new Date(comm.date_envoi).toLocaleDateString('fr-FR');
+                    const isWhatsapp = ['whatsapp', 'watsp'].includes((comm.canal || '').toLowerCase());
+                    const icon = (comm.canal || '').toLowerCase() === 'email' ? 'fa-envelope' : isWhatsapp ? 'fa-whatsapp' : 'fa-bell';
+                    const bg = (comm.canal || '').toLowerCase() === 'email' ? '#dbeafe' : isWhatsapp ? '#d1fae5' : '#ede9fe';
+                    const color = (comm.canal || '').toLowerCase() === 'email' ? '#3b82f6' : isWhatsapp ? '#10b981' : '#8b5cf6';
+
+                    return (
+                      <div
+                        key={comm.id}
+                        style={{
+                          background: 'white',
+                          borderRadius: 14,
+                          padding: '18px 22px',
+                          boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+                          marginBottom: 10,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 14,
+                          border: '1px solid #f1f5f9',
+                        }}
+                      >
+                        <div style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, background: bg, color }}>
+                          <i className={isWhatsapp ? `fab ${icon}` : `far ${icon}`}></i>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{comm.titre}</div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                            {comm.canal} · {comm.nombre_destinataires} destinataire(s)
+                            {comm.statut_ou_metrique ? ` · ${comm.statut_ou_metrique}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', whiteSpace: 'nowrap', marginTop: 2 }}>{date}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* ── Onglet WhatsApp ── */}
+            {commSubTab === 'whatsapp' && (
+              <div style={{ marginTop: 20 }}>
+                <WhatsAppBroadcastForm
+                  adherents={adherents}
+                  evenements={evenements}
+                  onSuccess={async () => {
+                    const comms = await fetchWithAuth('/api/admin/communications');
+                    setCommunications(comms);
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1040,8 +1059,8 @@ export default function AdminPage() {
                       <td style={tdStyle}><span style={{ fontSize: 13 }}>{doc.ajoute_par || 'Admin Système'}</span></td>
                       <td style={tdStyle}>
                         <div className="td-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <a href={`http://localhost:8000${doc.chemin_fichier}`} target="_blank" rel="noreferrer" className="icon-btn view-btn" style={iconBtnStyle('#ede9fe', 'var(--primary)')}><i className="fas fa-eye"></i></a>
-                          <a href={`http://localhost:8000${doc.chemin_fichier}`} download className="icon-btn dl" style={iconBtnStyle('#d1fae5', '#10b981')}><i className="fas fa-download"></i></a>
+                          <a href={`https://adh-rant.onrender.com${doc.chemin_fichier}`} target="_blank" rel="noreferrer" className="icon-btn view-btn" style={iconBtnStyle('#ede9fe', 'var(--primary)')}><i className="fas fa-eye"></i></a>
+                          <a href={`https://adh-rant.onrender.com${doc.chemin_fichier}`} download className="icon-btn dl" style={iconBtnStyle('#d1fae5', '#10b981')}><i className="fas fa-download"></i></a>
                           <button className="icon-btn del" style={iconBtnStyle('#fee2e2', '#ef4444')} onClick={() => handleDeleteDocument(doc.id)}><i className="fas fa-trash"></i></button>
                         </div>
                       </td>
@@ -1169,7 +1188,7 @@ export default function AdminPage() {
                           <td style={tdStyle}>
                             {r.preuve_paiement ? (
                               <a 
-                                href={`http://localhost:8000${r.preuve_paiement}`} 
+                                href={`https://adh-rant.onrender.com${r.preuve_paiement}`} 
                                 target="_blank" 
                                 rel="noreferrer"
                                 style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
@@ -1205,195 +1224,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* SECTION: FINANCES */}
-        {/* SECTION: FINANCES */}
-        {activePage === 'finances' && (
-          <div className="page-content animation-fade-in" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-              <div className="page-title">
-                <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}>Finances</h1>
-                <p style={{ fontSize: '14px', color: '#64748b' }}>Journal des revenus, dépenses et fournisseurs</p>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontWeight: 700, padding: '10px 18px' }} onClick={() => setShowFournisseurModal(true)}>
-                  <i className="fas fa-truck" style={{ marginRight: 6 }}></i>Nouveau Fournisseur
-                </button>
-                <button className="btn btn-primary" style={{ borderRadius: 10, fontSize: 13, fontWeight: 700, padding: '10px 18px' }} onClick={() => setShowDepenseModal(true)}>
-                  <i className="fas fa-plus" style={{ marginRight: 6 }}></i>Enregistrer une Dépense
-                </button>
-              </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 32, background: '#f1f5f9', padding: 4, borderRadius: 12, width: 'fit-content' }}>
-              <button onClick={() => setFinanceTab('revenus')} style={financeTab === 'revenus' ? activeTabStyle : inactiveTabStyle}>Revenus (Adhésions)</button>
-              <button onClick={() => setFinanceTab('depenses')} style={financeTab === 'depenses' ? activeTabStyle : inactiveTabStyle}>Dépenses</button>
-              <button onClick={() => setFinanceTab('fournisseurs')} style={financeTab === 'fournisseurs' ? activeTabStyle : inactiveTabStyle}>Fournisseurs</button>
-            </div>
-
-            {/* STATS FINANCIÈRES */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
-              <div className="stat-card" style={{ background: '#ecfdf5', borderRadius: 16, padding: 20, border: '1px solid #10b98122' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', textTransform: 'uppercase' }}>Total Revenus</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#064e3b', marginTop: 8 }}>
-                  {renouvellements.reduce((acc, r) => acc + (r.statut === 'Approuvé' ? r.montant : 0), 0).toLocaleString()} MAD
-                </div>
-              </div>
-              <div className="stat-card" style={{ background: '#fff1f2', borderRadius: 16, padding: 20, border: '1px solid #f43f5e22' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#e11d48', textTransform: 'uppercase' }}>Total Dépenses</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#881337', marginTop: 8 }}>
-                  {depenses.reduce((acc, d) => acc + d.montant, 0).toLocaleString()} MAD
-                </div>
-              </div>
-              <div className="stat-card" style={{ background: '#eff6ff', borderRadius: 16, padding: 20, border: '1px solid #3b82f622' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Solde Net</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#1e3a8a', marginTop: 8 }}>
-                  {(renouvellements.reduce((acc, r) => acc + (r.statut === 'Approuvé' ? r.montant : 0), 0) - depenses.reduce((acc, d) => acc + d.montant, 0)).toLocaleString()} MAD
-                </div>
-              </div>
-              <div className="stat-card" style={{ background: '#fef3c7', borderRadius: 16, padding: 20, border: '1px solid #d9770622' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#d97706', textTransform: 'uppercase' }}>Virements en attente</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#78350f', marginTop: 8 }}>
-                  {renouvellements.filter(r => r.mode_paiement === 'virement' && r.statut === 'en attente').length}
-                </div>
-              </div>
-            </div>
-
-            {financeTab === 'revenus' && (
-              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
-                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Journal des Adhésions</h3>
-                <div className="data-table">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Date</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Adhérent</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Mode</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Montant</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Documents</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Statut</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {renouvellements.map((r, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={tdStyle}>{new Date(r.date_paiement).toLocaleDateString()}</td>
-                          <td style={tdStyle}>{r.nom_adherent || 'Inconnu'}</td>
-                          <td style={tdStyle}><span style={{ padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: '#f1f5f9' }}>{r.mode_paiement.toUpperCase()}</span></td>
-                          <td style={tdStyle}><span style={{ fontWeight: 700 }}>{r.montant} MAD</span></td>
-                          <td style={tdStyle}>
-                            {r.preuve_paiement ? (
-                              <a href={`http://localhost:8000${r.preuve_paiement}`} target="_blank" rel="noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: 12, fontWeight: 700 }}>👁️ Voir Preuve</a>
-                            ) : '—'}
-                          </td>
-                          <td style={tdStyle}>
-                            {r.documents && r.documents.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                {r.documents.map((d: any, idx: number) => (
-                                  <a key={idx} href={`http://localhost:8000${d.url}`} target="_blank" rel="noreferrer" title={d.type} style={{ textDecoration: 'none', fontSize: 14 }}>
-                                    {d.type === 'Photo' ? '👤' : '📄'}
-                                  </a>
-                                ))}
-                              </div>
-                            ) : '—'}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={{ 
-                              padding: '4px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, 
-                              background: r.statut === 'validé' ? '#d1fae5' : (r.statut === 'refuser' ? '#fee2e2' : '#fef3c7'), 
-                              color: r.statut === 'validé' ? '#065f46' : (r.statut === 'refuser' ? '#991b1b' : '#92400e') 
-                            }}>
-                              {r.statut.replace('_', ' ').toUpperCase()}
-                            </span>
-                          </td>
-                          <td style={tdStyle}>
-                            {r.statut !== 'validé' && r.statut !== 'refuser' && (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button 
-                                  onClick={() => handleApprouverRenouvellement(r.id)} 
-                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#10b981', color: 'white', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                >
-                                  {r.statut === 'attente_docs' ? 'Approuver Docs' : 'Valider Paiement'}
-                                </button>
-                                <button 
-                                  onClick={() => handleRefuserRenouvellement(r.id)} 
-                                  style={{ padding: '6px 12px', borderRadius: 8, background: '#ef4444', color: 'white', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                >
-                                  Refuser
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {financeTab === 'depenses' && (
-              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
-                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Journal des Dépenses</h3>
-                <div className="data-table">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Date</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Titre</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Catégorie</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Fournisseur</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Montant</th>
-                        <th style={{ ...thStyle, textAlign: 'left' }}>Mode</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {depenses.length === 0 ? (
-                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Aucune dépense enregistrée.</td></tr>
-                      ) : depenses.map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={tdStyle}>{new Date(d.date_depense).toLocaleDateString()}</td>
-                          <td style={tdStyle}><span style={{ fontWeight: 600 }}>{d.titre}</span></td>
-                          <td style={tdStyle}><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, background: '#fef3c7', color: '#d97706', fontWeight: 700 }}>{d.categorie}</span></td>
-                          <td style={tdStyle}>{fournisseurs.find(f => f.id === d.fournisseur_id)?.nom || '—'}</td>
-                          <td style={tdStyle}><span style={{ fontWeight: 800, color: '#e11d48' }}>-{d.montant} MAD</span></td>
-                          <td style={tdStyle}>{d.mode_paiement}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {financeTab === 'fournisseurs' && (
-              <div className="section-card" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}>
-                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e293b', margin: '0 0 20px 0' }}>Liste des Fournisseurs</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-                  {fournisseurs.length === 0 ? (
-                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#94a3b8' }}>Aucun fournisseur enregistré.</div>
-                  ) : fournisseurs.map((f, i) => (
-                    <div key={i} style={{ padding: 20, borderRadius: 16, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', marginBottom: 4 }}>{f.nom}</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6', marginBottom: 12, textTransform: 'uppercase' }}>{f.type_service}</div>
-                      <div style={{ display: 'grid', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
-                          <i className="fas fa-user" style={{ width: 14 }}></i> {f.contact_nom || '—'}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
-                          <i className="fas fa-phone" style={{ width: 14 }}></i> {f.telephone || '—'}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
-                          <i className="fas fa-envelope" style={{ width: 14 }}></i> {f.email || '—'}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </main>
 
       {/* MODAL VOIR */}
@@ -1460,10 +1291,10 @@ export default function AdminPage() {
                             <div key={docName} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px' }}>
                               <i className="fas fa-file-pdf" style={{ color: '#e53e3e', fontSize: 16 }}></i>
                               <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>{docName}</span>
-                              <a href={`http://localhost:8000${url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <a href={`https://adh-rant.onrender.com${url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <i className="fas fa-eye"></i> Voir
                               </a>
-                              <a href={`http://localhost:8000${url}`} download style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <a href={`https://adh-rant.onrender.com${url}`} download style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <i className="fas fa-download"></i>
                               </a>
                             </div>
@@ -1475,7 +1306,7 @@ export default function AdminPage() {
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px' }}>
                               <i className="fas fa-file-pdf" style={{ color: '#e53e3e', fontSize: 16 }}></i>
                               <span style={{ fontSize: 13, fontWeight: 600, color: '#1e40af' }}>{doc.nom || doc.name || `Document ${i+1}`}</span>
-                              {doc.url && <a href={`http://localhost:8000${doc.url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}><i className="fas fa-eye"></i> Voir</a>}
+                              {doc.url && <a href={`https://adh-rant.onrender.com${doc.url}`} target="_blank" rel="noreferrer" style={{ marginLeft: 8, background: '#3b82f6', color: 'white', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}><i className="fas fa-eye"></i> Voir</a>}
                             </div>
                           ));
                         }
@@ -1583,7 +1414,7 @@ export default function AdminPage() {
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Documents rattachés</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     {editingAdherent.documents.map((doc: any, idx: number) => (
-                      <a href={`http://localhost:8000${doc.chemin_fichier}`} target="_blank" rel="noreferrer" key={idx} style={{ background: '#dbeafe', color: '#3b82f6', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', border: '1px solid #bfdbfe', transition: '.2s' }}>
+                      <a href={`https://adh-rant.onrender.com${doc.chemin_fichier}`} target="_blank" rel="noreferrer" key={idx} style={{ background: '#dbeafe', color: '#3b82f6', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', border: '1px solid #bfdbfe', transition: '.2s' }}>
                         <i className="fas fa-file-pdf"></i>
                         {doc.nom_fichier}
                       </a>
@@ -1957,104 +1788,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* MODAL NOUVELLE DÉPENSE */}
-      {showDepenseModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 450, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Enregistrer une dépense</h3>
-              <button onClick={() => setShowDepenseModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
-            </div>
-            <form onSubmit={handleDepenseSubmit} style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Titre / Objet *</label>
-                <input type="text" required value={depenseForm.titre} onChange={e => setDepenseForm({ ...depenseForm, titre: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Ex: Impression flyers" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Montant (MAD) *</label>
-                  <input type="number" required value={depenseForm.montant} onChange={e => setDepenseForm({ ...depenseForm, montant: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Catégorie *</label>
-                  <select value={depenseForm.categorie} onChange={e => setDepenseForm({ ...depenseForm, categorie: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
-                    <option value="Administratif">Administratif</option>
-                    <option value="Événement">Événement</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Logistique">Logistique</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Fournisseur</label>
-                <select value={depenseForm.fournisseur_id} onChange={e => setDepenseForm({ ...depenseForm, fournisseur_id: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
-                  <option value="">-- Aucun --</option>
-                  {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mode de paiement</label>
-                <select value={depenseForm.mode_paiement} onChange={e => setDepenseForm({ ...depenseForm, mode_paiement: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'white' }}>
-                  <option value="Virement">Virement</option>
-                  <option value="Chèque">Chèque</option>
-                  <option value="Espèces">Espèces</option>
-                  <option value="Carte">Carte</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn btn-outline" onClick={() => setShowDepenseModal(false)}>Annuler</button>
-                <button type="submit" className="btn btn-primary">Enregistrer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL NOUVEAU FOURNISSEUR */}
-      {showFournisseurModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 500, padding: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Nouveau fournisseur</h3>
-              <button onClick={() => setShowFournisseurModal(false)} style={{ background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#999' }}>&times;</button>
-            </div>
-            <form onSubmit={handleFournisseurSubmit} style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom du fournisseur *</label>
-                <input type="text" required value={fournisseurForm.nom} onChange={e => setFournisseurForm({ ...fournisseurForm, nom: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Nom du contact</label>
-                  <input type="text" value={fournisseurForm.contact_nom} onChange={e => setFournisseurForm({ ...fournisseurForm, contact_nom: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Type de service</label>
-                  <input type="text" value={fournisseurForm.type_service} onChange={e => setFournisseurForm({ ...fournisseurForm, type_service: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} placeholder="Ex: Traiteur" />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Email</label>
-                  <input type="email" value={fournisseurForm.email} onChange={e => setFournisseurForm({ ...fournisseurForm, email: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Téléphone</label>
-                  <input type="tel" value={fournisseurForm.telephone} onChange={e => setFournisseurForm({ ...fournisseurForm, telephone: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14 }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Adresse</label>
-                <textarea value={fournisseurForm.adresse} onChange={e => setFournisseurForm({ ...fournisseurForm, adresse: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, minHeight: 60 }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                <button type="button" className="btn btn-outline" onClick={() => setShowFournisseurModal(false)}>Annuler</button>
-                <button type="submit" className="btn btn-primary">Ajouter</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       <datalist id="categories-list">
       <option value="Séminaire" />
