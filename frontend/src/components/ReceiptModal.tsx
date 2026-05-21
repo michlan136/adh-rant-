@@ -91,16 +91,17 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
           </div>
         </div>
 
-        <div id="receipt-content" style={{ padding: 48, overflowY: 'auto' }}>
-          <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 60 }}>
-            <div className="logo-section">
-              <h1 style={{ margin: 0, color: '#1e1b4b', fontSize: 28, letterSpacing: 1 }}>ADH-RANT</h1>
-              <p style={{ margin: '4px 0 0', color: '#64748b', font_size: 14 }}>Portail Membre Officiel</p>
-            </div>
-            <div className="title-section" style={{ textAlign: 'right' }}>
-              <h2 style={{ margin: 0, color: '#1e1b4b', fontSize: 20, fontWeight: 800 }}>REÇU DE PAIEMENT</h2>
-              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Réf: #{data.ref}</p>
-            </div>
+      <div id="receipt-content" style={{ padding: 48, overflowY: 'auto' }}>
+          <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 60 }}>
+            <div className="logo-section">
+              <h1 style={{ margin: 0, color: '#1e1b4b', fontSize: 28, letterSpacing: 1 }}>ADH-RANT</h1>
+              {/* C'est ici que la correction a été faite (fontSize au lieu de font_size) 👇 */}
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Portail Membre Officiel</p>
+            </div>
+            <div className="title-section" style={{ textAlign: 'right' }}>
+              <h2 style={{ margin: 0, color: '#1e1b4b', fontSize: 20, fontWeight: 800 }}>REÇU DE PAIEMENT</h2>
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Réf: #{data.ref}</p>
+            </div>
           </div>
 
           <div className="info-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginBottom: 60 }}>
