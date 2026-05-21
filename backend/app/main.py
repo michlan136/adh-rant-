@@ -5,6 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 import traceback
 import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 from .db.session import engine, Base, get_db
 from .models.login import Login
@@ -39,7 +42,7 @@ from .models.finance import Fournisseur, Depense
 from .schemas.login import LoginRequest
 from .core.security import create_access_token
 
-from .api import endpoints_admin, finance
+from .api import endpoints_admin, finance, communication as communication_api
 
 # Création des tables dans la base de données
 Base.metadata.create_all(bind=engine)
@@ -81,6 +84,7 @@ app.include_router(adherent_router.router, prefix="/api", tags=["Adhérents"])
 app.include_router(document_router.router, prefix="/api", tags=["Documents"])
 app.include_router(endpoints_admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(finance.router, prefix="/api/finance", tags=["Finance"])
+app.include_router(communication_api.router, prefix="/api/communication", tags=["Communication"])
 
 @app.get("/")
 def read_root():
