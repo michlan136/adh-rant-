@@ -15,6 +15,8 @@ export interface AuthUser {
   statut?: string;
   photo_url?: string;
   type_adherent?: string;
+  telephone?: string; // 👈 Ajouté pour la page Carte
+  adresse?: string;   // 👈 Ajouté pour la page Carte
 }
 
 interface AuthContextValue {
@@ -108,6 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         statut: adherentData?.statut,
         photo_url: adherentData?.photo_url,
         type_adherent: adherentData?.type_adherent,
+        telephone: adherentData?.telephone, // Optionnel: pour le récupérer du backend s'il existe
+        adresse: adherentData?.adresse,     // Optionnel: pour le récupérer du backend s'il existe
       };
 
       // 4. Mettre à jour l'état React
