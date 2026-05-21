@@ -16,7 +16,8 @@ export interface AuthUser {
   photo_url?: string;
   type_adherent?: string;
   telephone?: string; // 👈 Ajouté pour la page Carte
-  adresse?: string;   // 👈 Ajouté pour la page Carte
+  adresse?: string;
+  date_adhesion?: string;// 👈 Ajouté pour la page Carte
 }
 
 interface AuthContextValue {
