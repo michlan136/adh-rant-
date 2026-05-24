@@ -54,10 +54,10 @@ def send_email(to_email: str, subject: str, content: str, html_content: str = No
         server.send_message(msg)
         server.quit()
 
-        print(f"✅ Email envoyé avec succès à {to_email}")
+        print(f"[OK] Email envoyé avec succès à {to_email}")
         return True
     except Exception as e:
-        print(f"❌ Erreur lors de l'envoi de l'email à {to_email}: {e}")
+        print(f"[ERREUR] Erreur lors de l'envoi de l'email à {to_email}: {e}")
         return False
 
 
@@ -215,12 +215,12 @@ def send_bulk_emails(recipients: list, subject: str, content: str, attachment_pa
 
                 server.send_message(msg)
                 success_count += 1
-                print(f"✅ Bulk Email envoyé à {email}")
+                print(f"[OK] Bulk Email envoyé à {email}")
             except Exception as e:
-                print(f"❌ Erreur bulk pour {email}: {e}")
+                print(f"[ERREUR] Erreur bulk pour {email}: {e}")
 
         server.quit()
     except Exception as e:
-        print(f"❌ Erreur connexion SMTP bulk: {e}")
+        print(f"[ERREUR] Erreur connexion SMTP bulk: {e}")
 
     return success_count
