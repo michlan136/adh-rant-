@@ -15,8 +15,11 @@ export async function fetchWithAuth(endpoint: string, options: RequestInit = {})
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  // Chemin relatif → passe par le proxy Next.js → pas de CORS
-  const response = await fetch(endpoint, {
+  // Prepend API URL if defined, otherwise use relative path (passing by Next.js proxy)
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });
