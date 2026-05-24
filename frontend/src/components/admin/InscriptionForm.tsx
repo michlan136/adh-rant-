@@ -95,16 +95,13 @@ export default function InscriptionForm({ onSuccess }: InscriptionFormProps) {
         if (file) {
           const fd = new FormData();
           fd.append('file', file);
-          const upRes = await fetch('/api/admin/upload-doc', { method: 'POST', body: fd });
-          if (upRes.ok) {
-            const data = await upRes.json();
-            uploadedUrls[docName] = data.filepath;
-          }
+          const data = await fetchWithAuth('/api/admin/upload-doc', { method: 'POST', body: fd });
+          uploadedUrls[docName] = data.filepath;
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur upload", err);
-      alert("Erreur lors du téléversement des documents.");
+      alert(`Erreur lors du téléversement des documents : ${err?.message || err}`);
       setSubmitting(false);
       return;
     }
