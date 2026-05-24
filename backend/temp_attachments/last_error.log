@@ -9,9 +9,8 @@ Traceback (most recent call last):
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-psycopg2.errors.UndefinedColumn: ERREUR:  la colonne entreprise.documents n'existe pas
-LINE 1: ..._telephone, entreprise.email AS entreprise_email, entreprise...
-                                                             ^
+psycopg2.errors.CheckViolation: ERREUR:  la nouvelle ligne de la relation « renouvellement » viole la contrainte de vérification « chk_renouv_statut »
+DETAIL:  La ligne en échec contient (1, 7, 2026, 2026, 2026-05-24, 150.00, carte, validé, validé, null, Physique).
 
 
 The above exception was the direct cause of the following exception:
@@ -19,7 +18,9 @@ The above exception was the direct cause of the following exception:
 Traceback (most recent call last):
   File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
     await self.app(scope, receive, _send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
     await self.app(scope, receive, send)
   File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
@@ -68,46 +69,62 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "C:\stage_projet\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
     result = context.run(func, *args)
-  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 96, in get_adherents
-    .all()
-     ~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2711, in all
-    return self._iter().all()  # type: ignore
-           ~~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2864, in _iter
-    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
-                                                  ~~~~~~~~~~~~~~~~~~~~^
-        statement,
-        ^^^^^^^^^^
-        params,
+  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 1104, in approuver_renouvellement
+    db.commit()
+    ~~~~~~~~~^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "<string>", line 2, in commit
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "<string>", line 2, in _prepare_impl
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        update,
         ^^^^^^^
-        execution_options={"_sa_orm_load_options": self.load_options},
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
-    return self._execute_internal(
-           ~~~~~~~~~~~~~~~~~~~~~~^
-        statement,
-        ^^^^^^^^^^
-    ...<4 lines>...
-        _add_event=_add_event,
-        ^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
-    result: Result[Any] = compile_state_cls.orm_execute_statement(
-                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        self,
-        ^^^^^
-    ...<4 lines>...
-        conn,
-        ^^^^^
-    )
-    ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
-    result = conn.execute(
-        statement, params or {}, execution_options=execution_options
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        statement, multiparams, execution_options=execution_options
     )
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
     return meth(
@@ -154,10 +171,9 @@ Traceback (most recent call last):
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) ERREUR:  la colonne entreprise.documents n'existe pas
-LINE 1: ..._telephone, entreprise.email AS entreprise_email, entreprise...
-                                                             ^
+sqlalchemy.exc.IntegrityError: (psycopg2.errors.CheckViolation) ERREUR:  la nouvelle ligne de la relation « renouvellement » viole la contrainte de vérification « chk_renouv_statut »
+DETAIL:  La ligne en échec contient (1, 7, 2026, 2026, 2026-05-24, 150.00, carte, validé, validé, null, Physique).
 
-[SQL: SELECT entreprise.id AS entreprise_id, entreprise.raison_sociale AS entreprise_raison_sociale, entreprise.telephone AS entreprise_telephone, entreprise.email AS entreprise_email, entreprise.documents AS entreprise_documents, entreprise.nom AS entreprise_nom, entreprise.prenom AS entreprise_prenom, entreprise.adresse AS entreprise_adresse, entreprise.date_creation AS entreprise_date_creation, entreprise.effetive AS entreprise_effetive, entreprise.ice AS entreprise_ice, entreprise.tax_professionnelle AS entreprise_tax_professionnelle, entreprise.description_activite AS entreprise_description_activite, entreprise.donnees_extra AS entreprise_donnees_extra, entreprise.effectif_id AS entreprise_effectif_id, entreprise.ca_id AS entreprise_ca_id, entreprise.forme_juridique_id AS entreprise_forme_juridique_id, entreprise.marque_id AS entreprise_marque_id, entreprise.ville_id AS entreprise_ville_id, entreprise.est_valide AS entreprise_est_valide, entreprise.derniere_connexion_activite AS entreprise_derniere_connexion_activite, entreprise.cin AS entreprise_cin, entreprise.date_naissance AS entreprise_date_naissance, entreprise.profession AS entreprise_profession, entreprise.numero_patente AS entreprise_numero_patente, entreprise.photo_url AS entreprise_photo_url, login.id AS login_id, login.email AS login_email, login.mot_de_passe AS login_mot_de_passe, login.role AS login_role, login.entreprise_id AS login_entreprise_id, login.est_active AS login_est_active 
-FROM entreprise LEFT OUTER JOIN login ON login.entreprise_id = entreprise.id]
-(Background on this error at: https://sqlalche.me/e/20/f405)
+[SQL: UPDATE renouvellement SET statut=%(statut)s, statut_paiement=%(statut_paiement)s WHERE renouvellement.id = %(renouvellement_id)s]
+[parameters: {'statut': 'validé', 'statut_paiement': 'validé', 'renouvellement_id': 1}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

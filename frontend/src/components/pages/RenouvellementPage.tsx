@@ -44,11 +44,15 @@ export default function RenouvellementPage() {
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [senderInfo, setSenderInfo] = useState({ nom: '', banque: '', date: '' });
   const [cardType, setCardType] = useState<'cmi' | 'visa' | 'mastercard'>('cmi');
+  const [selectedType, setSelectedType] = useState<'Physique' | 'Moral'>('Physique');
+  const [error, setError] = useState<string | null>(null);
 
   const today = new Date();
   const nextYear = new Date(today);
   nextYear.setFullYear(nextYear.getFullYear() + 1);
   const fmtDate = (d: Date) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const dateDebut = eligibility?.date_debut ? new Date(eligibility.date_debut) : today;
+  const dateFin = eligibility?.date_fin ? new Date(eligibility.date_fin) : nextYear;
 
   useEffect(() => {
     const check = async () => {
@@ -60,6 +64,9 @@ export default function RenouvellementPage() {
           const data = await res.json();
           setEligibility(data);
           
+          if (data.type_adherent) {
+            setSelectedType(data.type_adherent === 'Moral' ? 'Moral' : 'Physique');
+          }
           if (data.active_renewal) {
             const r = data.active_renewal;
             if (r.statut === 'attente_docs') setStep('documents'); // Juste pour info, mais il a déjà envoyé
@@ -69,8 +76,18 @@ export default function RenouvellementPage() {
           } else if (data.eligible) {
             setStep('documents');
           }
+        } else {
+          let msg = "Erreur de chargement des données d'éligibilité.";
+          try {
+            const errData = await res.json();
+            msg = errData.detail || msg;
+          } catch {}
+          setError(msg);
         }
-      } catch (err) { console.error(err); }
+      } catch (err: any) { 
+        console.error(err); 
+        setError("Erreur de connexion avec le serveur.");
+      }
       finally { setLoading(false); }
     };
     check();
@@ -81,7 +98,7 @@ export default function RenouvellementPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const isPhysique = eligibility?.type_adherent === 'Physique';
+  const isPhysique = selectedType === 'Physique';
   const price = isPhysique ? 150 : 500;
 
   const requiredDocs = isPhysique
@@ -134,6 +151,7 @@ export default function RenouvellementPage() {
       const formData = new FormData();
       formData.append('mode_paiement', payMethod);
       formData.append('montant', price.toString());
+      formData.append('type_adherent', selectedType);
       if (docs.identite) formData.append('document_identite', docs.identite);
       if (docs.photo) formData.append('document_photo', docs.photo);
       if (docs.rc) formData.append('document_rc', docs.rc);
@@ -169,6 +187,19 @@ export default function RenouvellementPage() {
         <div style={{ width: 40, height: 40, border: '3px solid #e2e8f0', borderTopColor: '#4f46e5', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
         Vérification de l&apos;éligibilité...
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-enter" style={{ display: 'flex', flexDirection: 'column', minHeight: '70vh', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 40, textAlign: 'center', maxWidth: 500, width: '100%', boxShadow: '0 4px 20px rgba(0,0,0,.06)', border: '1px solid var(--border)' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#fee2e2', display: 'grid', placeItems: 'center', margin: '0 auto 20px', fontSize: 28 }}>⚠️</div>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: '#ef4444' }}>Vérification impossible</h3>
+          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: 14 }}>{error}</p>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 24, padding: '12px 24px', borderRadius: 12, border: 'none', background: '#4f46e5', color: 'white', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(79,70,229,0.3)' }}>Réessayer</button>
+        </div>
       </div>
     );
   }
@@ -322,6 +353,25 @@ export default function RenouvellementPage() {
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
                 {activeR ? "Documents envoyés. Attendez l'approbation." : `Veuillez importer les documents nécessaires pour votre type d'adhésion (${isPhysique ? 'Personne Physique' : 'Personne Morale'})`}
               </p>
+              {!activeR && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Type d&apos;abonnement / adhésion
+                  </label>
+                  <select 
+                    value={selectedType} 
+                    onChange={e => {
+                      setSelectedType(e.target.value as 'Physique' | 'Moral');
+                      // Réinitialiser les fichiers pour éviter des conflits
+                      setDocs({ identite: null, photo: null, rc: null, patente: null });
+                    }}
+                    style={{ width: '100%', padding: '11px 14px', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', cursor: 'pointer' }}
+                  >
+                    <option value="Physique">Personne Physique (150 MAD / an)</option>
+                    <option value="Moral">Personne Morale / Société (500 MAD / an)</option>
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {requiredDocs.map(doc => (
                   <div key={doc.key} style={{
@@ -497,8 +547,8 @@ export default function RenouvellementPage() {
           {[
             { label: 'Type d\'adhésion', value: isPhysique ? 'Personne Physique' : 'Personne Morale' },
             { label: 'Durée', value: '1 an' },
-            { label: 'Date de début', value: fmtDate(today) },
-            { label: 'Date de fin', value: fmtDate(nextYear) },
+            { label: 'Date de début', value: fmtDate(dateDebut) },
+            { label: 'Date de fin', value: fmtDate(dateFin) },
           ].map((r, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-light)', fontSize: 13 }}>
               <span style={{ color: 'var(--text-secondary)' }}>{r.label}</span>

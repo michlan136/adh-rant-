@@ -14,3 +14,4 @@ class Renouvellement(Base):
     statut_paiement = Column(String, default="en attente")  # en attente, payé, validé
     preuve_paiement = Column(String, nullable=True)        # Chemin vers le reçu (virement/chèque)
     entreprise_id = Column(Integer, ForeignKey("entreprise.id"), nullable=True)
+    type_adherent = Column(String, nullable=True)          # "Physique" ou "Moral"

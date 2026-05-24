@@ -675,15 +675,15 @@ def renouveler_carte(carte_id: int, db: Session = Depends(get_db)):
     if not carte:
         raise HTTPException(status_code=404, detail="Carte introuvable")
         
-    if carte.statut == "renouvelee":
-        raise HTTPException(status_code=400, detail="Cette carte a déjà été renouvelée.")
+    if carte.statut == "expire":
+        raise HTTPException(status_code=400, detail="Cette carte a déjà été renouvelée ou a expiré.")
         
     today = datetime.utcnow().date()
     if carte.date_expiration and (carte.date_expiration - today).days > 30:
         raise HTTPException(status_code=400, detail="Le renouvellement n'est possible qu'à moins de 30 jours de l'expiration.")
         
-    # Marquer l'ancienne carte comme renouvelée
-    carte.statut = "renouvelee"
+    # Marquer l'ancienne carte comme expirée
+    carte.statut = "expire"
     
     # Récupérer l'entreprise pour générer le bon type
     ent = db.query(Entreprise).filter(Entreprise.id == carte.entreprise_id).first()
@@ -717,8 +717,8 @@ def renouveler_carte(carte_id: int, db: Session = Depends(get_db)):
         montant=0.0,
         date_paiement=today,
         mode_paiement="Direct",
-        statut="validé",
-        statut_paiement="validé"
+        statut="valide",
+        statut_paiement="valide"
     )
     db.add(renouv)
     
@@ -1054,17 +1054,26 @@ def approuver_renouvellement(renouv_id: int, db: Session = Depends(get_db)):
         return {"message": "Documents approuvés. L'adhérent a été notifié pour le paiement."}
 
     # SI ON VALIDE LE PAIEMENT (Deuxième étape)
-    if r.statut == "docs_approuves" or r.statut_paiement == "payé":
+    if r.statut == "docs_approuves" or r.statut_paiement == "paye":
         today = date.today()
         try:
             new_expiry = today.replace(year=today.year + 1)
         except ValueError:
             new_expiry = today + timedelta(days=365)
 
-        r.statut = "validé"
-        r.statut_paiement = "validé"
+        r.statut = "valide"
+        r.statut_paiement = "valide"
         ent.est_valide = True
         ent.date_creation = today
+
+        # Mettre à jour le type de profil de l'adhérent s'il a changé lors du renouvellement
+        chosen_type = r.type_adherent or ("Moral" if ent.raison_sociale else "Physique")
+        if chosen_type == "Moral":
+            if not ent.raison_sociale:
+                ent.raison_sociale = f"{ent.prenom or ''} {ent.nom or ''}".strip() or "Société Adhérente"
+        else:
+            if not ent.nom:
+                ent.nom = ent.raison_sociale or "Adhérent"
 
         # Renouveler la carte
         carte = db.query(CarteAdherent).filter(
@@ -1072,9 +1081,9 @@ def approuver_renouvellement(renouv_id: int, db: Session = Depends(get_db)):
             CarteAdherent.statut.ilike("active")
         ).first()
         if carte:
-            carte.statut = "renouvelee"
+            carte.statut = "expire"
 
-        type_adh = "PM" if ent.raison_sociale else "PP"
+        type_adh = "PM" if chosen_type == "Moral" else "PP"
         compte_cartes = db.query(CarteAdherent).filter(CarteAdherent.entreprise_id == ent.id).count()
         nouvelle_carte = CarteAdherent(
             entreprise_id=ent.id,
@@ -1111,8 +1120,8 @@ def refuser_renouvellement(renouv_id: int, db: Session = Depends(get_db)):
     r = db.query(Renouvellement).filter(Renouvellement.id == renouv_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Renouvellement introuvable")
-    r.statut = "refusé"
-    r.statut_paiement = "refusé"
+    r.statut = "refuser"
+    r.statut_paiement = "refuse"
 
     notif = Notification(
         titre="Renouvellement refusé",

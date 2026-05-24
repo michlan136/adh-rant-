@@ -29,7 +29,23 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
+        
+        # Charge dynamiquement les informations les plus fraîches depuis la BDD
+        from ..db.session import SessionLocal
+        from ..models.login import Login
+        
+        db = SessionLocal()
+        try:
+            db_user = db.query(Login).filter(Login.email == email).first()
+            if db_user:
+                payload = dict(payload)
+                payload["entreprise_id"] = db_user.entreprise_id
+                payload["role"] = db_user.role
+        finally:
+            db.close()
+
         return payload
     except jwt.PyJWTError:
         raise credentials_exception
+
 

@@ -584,7 +584,7 @@ def check_renewal_eligibility(current_user: dict = Depends(get_current_user), db
     existing_renouv = db.query(Renouvellement).filter(
         Renouvellement.entreprise_id == entreprise_id,
         Renouvellement.annee == date.today().year,
-        Renouvellement.statut != "refusé"
+        Renouvellement.statut != "refuser"
     ).first()
 
     if existing_renouv:
@@ -625,6 +625,7 @@ def check_renewal_eligibility(current_user: dict = Depends(get_current_user), db
 async def submit_renouvellement(
     mode_paiement: str = Form(...),
     montant: float = Form(...),
+    type_adherent: str = Form("Physique"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
     document_identite: UploadFile = File(None),
@@ -653,7 +654,8 @@ async def submit_renouvellement(
         date_paiement=today,
         mode_paiement=mode_paiement,
         statut="attente_docs",
-        statut_paiement="en attente"
+        statut_paiement="en attente",
+        type_adherent=type_adherent
     )
     db.add(renouvellement)
     db.flush()
@@ -692,7 +694,7 @@ async def submit_renouvellement(
         with open(fpath, "wb") as buf:
             shutil.copyfileobj(preuve_paiement.file, buf)
         renouvellement.preuve_paiement = f"/uploads/{fname}"
-        renouvellement.statut_paiement = "payé"
+        renouvellement.statut_paiement = "paye"
 
     # Notification pour l'adhérent
     notif = Notification(

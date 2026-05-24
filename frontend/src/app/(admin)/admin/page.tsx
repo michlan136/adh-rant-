@@ -893,7 +893,7 @@ export default function AdminPage() {
                       const diffDays = c.date_expiration
                         ? Math.ceil((new Date(c.date_expiration).getTime() - Date.now()) / 86400000)
                         : 999;
-                      const canRenew = diffDays <= 30 && c.statut !== 'renouvelee';
+                      const canRenew = diffDays <= 30 && c.statut !== 'expire';
                       return (
                         <button className="btn btn-primary"
                           style={{ fontSize: 11, padding: '5px 14px', opacity: canRenew ? 1 : 0.42, cursor: canRenew ? 'pointer' : 'not-allowed' }}
