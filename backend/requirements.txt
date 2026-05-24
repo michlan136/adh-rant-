@@ -7,3 +7,6 @@ pyjwt
 pydantic
 requests
 python-multipart
+python-dotenv
+httpx
+dotenv
