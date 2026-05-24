@@ -161,7 +161,7 @@ export default function InscriptionForm({ onSuccess }: InscriptionFormProps) {
       
       // Association
       objet_association: formData.objetAssociation || null,
-      nom_president: formData.nomPresident || null,
+      nom_president: formData.nomPresident || formData.nomDirigeant || null,
       liste_membres_bureau: formData.listeMembresBureau || null,
 
       documents: JSON.stringify(uploadedUrls),
@@ -405,30 +405,6 @@ export default function InscriptionForm({ onSuccess }: InscriptionFormProps) {
                   </div>
                 </div>
               </div>
-
-              {/* Services demandés */}
-              <div className="card" style={{ marginBottom: '24px' }}>
-                <div className="card-body">
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: 20 }}>3. Services demandés</h3>
-                  {Object.entries(servicesCategories).map(([category, services]: [string, any]) => (
-                    <div key={category} style={{ background: 'var(--surface-2)', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
-                      <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{category}</h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {services.map((svc: any) => (
-                          <label key={svc.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                            <input
-                              type="checkbox"
-                              checked={(servicesDemandes[category] || []).includes(svc.id)}
-                              onChange={() => handleCheckboxChange(category, svc.id)}
-                            />
-                            {svc.titre}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </>
           )}
 
@@ -531,23 +507,96 @@ export default function InscriptionForm({ onSuccess }: InscriptionFormProps) {
               <div className="card" style={{ marginBottom: '24px' }}>
                 <div className="card-body">
                   <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: 20 }}>2. Informations spécifiques</h3>
+                  
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', marginBottom: 12 }}>📌 Légal & Financier</h4>
                   <div className="grid-2">
                     <div className="form-group"><label>Date de création</label><input type="date" name="dateCreation" value={formData.dateCreation} onChange={handleInputChange} /></div>
-                    <div className="form-group"><label>Objet de l’association</label><input type="text" name="objetAssociation" value={formData.objetAssociation} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>ICE</label><input type="text" name="ice" value={formData.ice} onChange={handleInputChange} /></div>
                   </div>
                   <div className="grid-2">
-                    <div className="form-group" style={{ marginBottom: 0 }}><label>Nom du président</label><input type="text" name="nomPresident" value={formData.nomPresident} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Registre du Commerce (RC)</label><input type="text" name="rc" value={formData.rc} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Capital en DH</label><input type="text" name="capital" value={formData.capital} onChange={handleInputChange} /></div>
                   </div>
-                  <div className="form-group" style={{ marginTop: 16, marginBottom: 0 }}>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label>Chiffre d’affaires</label>
+                      <select name="ca_id" value={formData.ca_id} onChange={handleInputChange} style={selectStyle}>
+                        <option value="">Sélectionner...</option>
+                        {cas.map((c: any) => (<option key={c.id} value={c.id}>{c.titre}</option>))}
+                      </select>
+                    </div>
+                    <div className="form-group"><label>Objet de l’association</label><input type="text" name="objetAssociation" value={formData.objetAssociation} onChange={handleInputChange} /></div>
+                  </div>
+
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', marginTop: 24, marginBottom: 12 }}>📌 Ressources Humaines</h4>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label>Effectif total</label>
+                      <select name="effectif_id" value={formData.effectif_id} onChange={handleInputChange} style={selectStyle}>
+                        <option value="">Sélectionner...</option>
+                        {effectifs.map((e: any) => (<option key={e.id} value={e.id}>{e.titre}</option>))}
+                      </select>
+                    </div>
+                    <div className="form-group"><label>% d’étrangers</label><input type="text" name="pourcentageEtrangers" value={formData.pourcentageEtrangers} onChange={handleInputChange} /></div>
+                  </div>
+                  <div className="form-group"><label>Nationalité dominante</label><input type="text" name="nationalite" value={formData.nationalite} onChange={handleInputChange} /></div>
+
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', marginTop: 24, marginBottom: 12 }}>📌 Dirigeant / Président</h4>
+                  <div className="grid-2">
+                    <div className="form-group"><label>Nom du président / dirigeant</label><input type="text" name="nomDirigeant" value={formData.nomDirigeant} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Fonction</label><input type="text" name="fonctionDirigeant" value={formData.fonctionDirigeant} onChange={handleInputChange} /></div>
+                  </div>
+                  <div className="grid-2">
+                    <div className="form-group"><label>GSM</label><input type="text" name="gsmDirigeant" value={formData.gsmDirigeant} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Email</label><input type="email" name="emailDirigeant" value={formData.emailDirigeant} onChange={handleInputChange} /></div>
+                  </div>
+                  <div className="grid-2">
+                    <div className="form-group"><label>LinkedIn</label><input type="text" name="linkedinDirigeant" value={formData.linkedinDirigeant} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Facebook</label><input type="text" name="facebookDirigeant" value={formData.facebookDirigeant} onChange={handleInputChange} /></div>
+                  </div>
+                  <div className="form-group" style={{ marginTop: 16 }}>
                     <label>Liste des membres du bureau (Texte)</label>
                     <textarea name="listeMembresBureau" value={formData.listeMembresBureau} onChange={handleInputChange} style={{...selectStyle, height: '80px', resize: 'vertical'}} placeholder="Nom - Rôle..." />
+                  </div>
+
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', marginTop: 24, marginBottom: 12 }}>📌 International & Distribution</h4>
+                  <div className="grid-2">
+                    <div className="form-group"><label>Pays d’importation</label><input type="text" name="paysImportation" value={formData.paysImportation} onChange={handleInputChange} /></div>
+                    <div className="form-group"><label>Pays d’exportation</label><input type="text" name="paysExportation" value={formData.paysExportation} onChange={handleInputChange} /></div>
+                  </div>
+                  <div className="grid-2" style={{ marginBottom: 0 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}><label>Marques représentées</label><input type="text" name="marquesRepresentees" value={formData.marquesRepresentees} onChange={handleInputChange} /></div>
+                    <div className="form-group" style={{ marginBottom: 0 }}><label>Franchises</label><input type="text" name="franchises" value={formData.franchises} onChange={handleInputChange} /></div>
                   </div>
                 </div>
               </div>
             </>
           )}
 
-          
+          {/* Services demandés (Visible pour tous) */}
+          <div className="card" style={{ marginBottom: '24px' }}>
+            <div className="card-body">
+              <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: 20 }}>3. Services demandés</h3>
+              {Object.entries(servicesCategories).map(([category, services]: [string, any]) => (
+                <div key={category} style={{ background: 'var(--surface-2)', padding: '16px', borderRadius: '12px', marginBottom: '16px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>{category}</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {services.map((svc: any) => (
+                      <label key={svc.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                        <input
+                          type="checkbox"
+                          checked={(servicesDemandes[category] || []).includes(svc.id)}
+                          onChange={() => handleCheckboxChange(category, svc.id)}
+                        />
+                        {svc.titre || svc.nom_salle}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* DOCUMENTS REQUIS */}
           {formeJuridique !== 'Sélectionner...' && formeJuridique !== 'Autre' && DOCUMENTS_REQUIS[formeJuridique] && (
             <div className="card" style={{ marginBottom: '24px' }}>
