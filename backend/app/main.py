@@ -16,7 +16,6 @@ from .models.login import Login
 from .models.document import Document
 from .models.entreprise import Entreprise
 from .models.inscription import DemandeInscription
-from .models.adherent import Adherent
 from .models.carte import CarteAdherent
 from .models.renouvellement import Renouvellement
 # Nouveaux modèles (tables déjà existantes en DB)
@@ -39,14 +38,18 @@ from .models.evenement import Evenement
 from .models.participation import Participation
 from .models.notification import Notification
 from .models.adhesion import Adhesion
-from .models.communication import Communication
+from .models.communication import Communication, EnvoiCommunication
 from .models.finance import Fournisseur, Depense
-# Nouveaux modèles cibles de communication
-from .models.cibles import Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles
+# Modèles cibles de communication (nouveau schéma gestion_adherent)
+from .models.cibles import (
+    Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles,
+    SousTypePublication, SousTypeFormation, SousTypeProspection,
+    SousTypeAssistance, SousTypeGuichet, SousTypeLocation
+)
 from .schemas.login import LoginRequest
 from .core.security import create_access_token
 
-from .api import endpoints_admin, finance, communication as communication_api
+from .api import endpoints_admin, finance, communication as communication_api, referentiels
 
 # Création des tables dans la base de données
 #Base.metadata.create_all(bind=engine)
@@ -89,6 +92,7 @@ app.include_router(document_router.router, prefix="/api", tags=["Documents"])
 app.include_router(endpoints_admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(finance.router, prefix="/api/finance", tags=["Finance"])
 app.include_router(communication_api.router, prefix="/api/communication", tags=["Communication"])
+app.include_router(referentiels.router, prefix="/api/referentiels", tags=["Référentiels"])
 
 @app.get("/")
 def read_root():

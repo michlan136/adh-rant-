@@ -310,14 +310,21 @@ async def send_whatsapp_batch(
             try:
                 # Si pièce jointe et gateway Ultramsg configurée → sendFile
                 if attachment_path and os.path.exists(attachment_path) and WHATSAPP_API_URL and WHATSAPP_API_TOKEN:
-                    # Construire l'URL d'envoi de fichier Ultramsg
-                    file_url = WHATSAPP_API_URL.replace("/messages/chat", "/messages/document")
-                    if "/messages/" not in file_url:
-                        file_url = WHATSAPP_API_URL.rstrip("/") + "/../messages/document"
-                    # Lire et envoyer le fichier comme base64 ou URL
-                    # Ultramsg accepte le chemin en tant que document via URL publique ou base64
+                    is_image = attachment_name and attachment_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+                    
+                    if is_image:
+                        file_url = WHATSAPP_API_URL.replace("/messages/chat", "/messages/image")
+                        if "/messages/" not in file_url:
+                            file_url = WHATSAPP_API_URL.rstrip("/") + "/../messages/image"
+                        file_key = "image"
+                    else:
+                        file_url = WHATSAPP_API_URL.replace("/messages/chat", "/messages/document")
+                        if "/messages/" not in file_url:
+                            file_url = WHATSAPP_API_URL.rstrip("/") + "/../messages/document"
+                        file_key = "document"
+
                     text_ok = await send_whatsapp_async(phone, message, client)
-                    # Envoi du fichier via Ultramsg sendFile endpoint
+                    
                     with open(attachment_path, "rb") as f:
                         import base64
                         file_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -325,9 +332,10 @@ async def send_whatsapp_batch(
                     data = {
                         "token": WHATSAPP_API_TOKEN,
                         "to": phone,
-                        "document": file_b64,
-                        "filename": attachment_name or os.path.basename(attachment_path)
+                        file_key: file_b64,
                     }
+                    if not is_image:
+                        data["filename"] = attachment_name or os.path.basename(attachment_path)
                     
                     try:
                         resp = await client.post(

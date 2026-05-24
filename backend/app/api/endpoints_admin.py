@@ -12,7 +12,7 @@ from datetime import datetime, date, timedelta
 
 from ..core.whatsapp import send_whatsapp_message, format_moroccan_phone
 from ..db.session import get_db
-from ..models.adherent import Adherent
+from ..models.entreprise import Entreprise
 from ..models.login import Login
 from ..models.inscription import DemandeInscription
 from ..models.carte import CarteAdherent
@@ -209,6 +209,23 @@ def update_adherent(adherent_id: int, payload: AdherentUpdate, db: Session = Dep
                 )
                 db.add(new_login)
                 
+                # Envoi des identifiants
+                nom_affiche = ent.raison_sociale or f"{ent.prenom or ''} {ent.nom or ''}".strip()
+                try:
+                    from ..core.email import send_welcome_email
+                    send_welcome_email(target_email, nom_affiche, password)
+                except Exception as e:
+                    print(f"Erreur envoi email: {e}")
+                
+                try:
+                    from ..core.whatsapp import send_whatsapp_message, format_moroccan_phone
+                    if ent.telephone:
+                        num_wa = format_moroccan_phone(ent.telephone)
+                        msg_wa = f"Bonjour {nom_affiche},\n\nVotre compte a bien été activé ! Voici vos identifiants d'accès :\nEmail : {target_email}\nMot de passe : {password}\n\nBienvenue parmi nous !"
+                        send_whatsapp_message(num_wa, msg_wa)
+                except Exception as e:
+                    print(f"Erreur envoi whatsapp: {e}")
+                
             # Génération automatique de la carte si on valide l'adhérent manuellement
             _generer_carte_pour_entreprise(ent, db)
                 
@@ -259,7 +276,7 @@ def get_demandes(db: Session = Depends(get_db)):
             "date_naissance": str(ent.date_naissance) if ent.date_naissance else "",
             "profession": ent.profession or "",
             "numero_patente": ent.numero_patente or "",
-            "documents": ent.documents
+            "documents": None  # Les documents sont maintenant dans la table document
         })
     return demandes
 
@@ -348,11 +365,24 @@ def valider_demande(demande_id: int, db: Session = Depends(get_db)):
 
     db.commit()
 
-    # Envoi email réel
+    # Envoi email et WhatsApp réel
     from ..core.email import send_welcome_email
+    from ..core.whatsapp import send_whatsapp_message, format_moroccan_phone
+    
     nom = ent.raison_sociale or f"{ent.prenom or ''} {ent.nom or ''}".strip()
     if password:
-        send_welcome_email(email, nom, password)
+        try:
+            send_welcome_email(email, nom, password)
+        except Exception as e:
+            print(f"Erreur envoi email: {e}")
+            
+        try:
+            if ent.telephone:
+                num_wa = format_moroccan_phone(ent.telephone)
+                msg_wa = f"Bonjour {nom},\n\nVotre demande d'inscription a été validée ! Voici vos identifiants d'accès :\nEmail : {email}\nMot de passe : {password}\n\nBienvenue parmi nous !"
+                send_whatsapp_message(num_wa, msg_wa)
+        except Exception as e:
+            print(f"Erreur envoi whatsapp: {e}")
 
     return {"message": "Demande validée avec succès", "email": email, "password_genere": password}
 
@@ -388,17 +418,26 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
         email=req.email_contact,
         telephone=req.telephone_contact,
         adresse=req.adresse,
+        ville_id=req.ville_id,
         raison_sociale=req.raison_sociale_entreprise,
         ice=req.ice,
-        tax_professionnelle=req.rc,
+        rc=req.rc,
+        secteur_activite=req.secteur_activite,
+        numero_registre=req.numero_registre,
+        numero_auto_entrepreneur=req.numero_auto_entrepreneur,
+        objet_association=req.objet_association,
+        nom_president=req.nom_president,
+        liste_membres_bureau=req.liste_membres_bureau,
         description_activite=req.activite_principale,
         date_creation=date_creation_parsed or datetime.utcnow().date(),
-        est_valide=True,
+        est_valide=False,
         cin=req.cin,
         date_naissance=date_naissance_parsed,
         profession=req.profession,
         numero_patente=req.numero_patente,
-        documents=req.documents,
+        forme_juridique_id=req.forme_juridique_id,
+        ca_id=req.ca_id,
+        effectif_id=req.effectif_id,
         donnees_extra=req.model_dump_json(exclude={"documents", "evenement_ids"}),
     )
     db.add(nouvelle_ent)
@@ -416,6 +455,7 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
             email=req.email_dirigeant,
             linkedin=req.linkedin_dirigeant,
             facebook=req.facebook_dirigeant,
+            fonction_id=req.fonction_dirigeant_id,
         )
         db.add(dirigeant)
         db.flush()
@@ -436,7 +476,6 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
         raison_sociale_entreprise=req.raison_sociale_entreprise or f"{req.nom_contact} {req.prenom_contact}",
         mot_de_passe="",  # sera généré ci-dessous
         statut="en attente",
-        documents=req.documents,
         services_demandes=services_json,
         entreprise_creee_id=nouvelle_ent.id,
     )
@@ -487,68 +526,68 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
             evt = db.query(Evenement).filter(Evenement.id == eid).first()
             if evt:
                 participation = Participation(
-                    entreprise_id=nouvelle_ent.id,
-                    type_cible="evenement",
-                    evenement_id=eid,
+                    id_adherent=nouvelle_ent.id,
+                    id_evenement=eid,
                     date_inscription=date_type.today(),
                     statut="inscrit"
                 )
                 db.add(participation)
 
-    # 8. Créer les participations pour les autres services demandés
     if req.services_demandes:
-        from ..models.cibles import Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles
         from datetime import date as date_type
-        
-        cible_models_map = {
-            "publication": (Publication, "publication_id"),
-            "formation": (Formation, "formation_id"),
-            "prospection": (Prospection, "prospection_id"),
-            "assistance_tpe": (AssistanceTPE, "assistance_tpe_id"),
-            "guichet": (Guichet, "guichet_id"),
-            "location_salles": (LocationSalles, "location_salles_id"),
+
+        # Map type_cible → participation FK column name
+        cible_fk_map = {
+            "publication": "id_publication",
+            "formation": "id_formation",
+            "prospection": "id_prospection",
+            "assistance_tpe": "id_assistance",
+            "guichet": "id_guichet",
+            "location_salles": "id_salle",
         }
-        
-        for service_name in req.services_demandes:
-            for type_cible, (model, fk_field) in cible_models_map.items():
+
+        for type_cible, list_ids in req.services_demandes.items():
+            # Normaliser la clé pour correspondre à cible_fk_map (ex: "Assistance TPE" -> "assistance_tpe")
+            normalized_type = type_cible.lower().replace(" ", "_") if type_cible else ""
+            fk_field = cible_fk_map.get(normalized_type)
+            if not fk_field:
+                continue
+                
+            for element_id in list_ids:
                 try:
-                    element = db.query(model).filter(model.nom == service_name).first()
-                    if element:
-                        participation = Participation(
-                            entreprise_id=nouvelle_ent.id,
-                            type_cible=type_cible,
-                            date_inscription=date_type.today(),
-                            statut="inscrit"
-                        )
-                        setattr(participation, fk_field, element.id)
-                        db.add(participation)
-                        break
-                except Exception:
-                    pass
+                    participation = Participation(
+                        id_adherent=nouvelle_ent.id,
+                        date_inscription=date_type.today(),
+                        statut="inscrit"
+                    )
+                    setattr(participation, fk_field, element_id)
+                    db.add(participation)
+                except Exception as e:
+                    print(f"Erreur ajout participation: {e}")
 
     # Génération automatique de la carte
     _generer_carte_pour_entreprise(nouvelle_ent, db)
 
     db.commit()
     
-    # Envoi des identifiants par email et WhatsApp
-    nom_affiche = nouvelle_ent.raison_sociale or f"{nouvelle_ent.prenom or ''} {nouvelle_ent.nom or ''}".strip()
-    
-    # Email
-    try:
-        from ..core.email import send_welcome_email
-        send_welcome_email(req.email_contact, nom_affiche, password)
-    except Exception as e:
-        print(f"Erreur envoi email: {e}")
-        
-    # WhatsApp
-    try:
-        if req.telephone_contact:
-            num_wa = format_moroccan_phone(req.telephone_contact)
-            msg_wa = f"Bonjour {nom_affiche},\n\nVotre compte a bien été créé ! Voici vos identifiants d'accès :\nEmail : {req.email_contact}\nMot de passe : {password}\n\nBienvenue parmi nous !"
-            send_whatsapp_message(num_wa, msg_wa)
-    except Exception as e:
-        print(f"Erreur envoi whatsapp: {e}")
+    # Envoi des identifiants par email et WhatsApp (Désactivé ici car envoyé lors de la validation)
+    # nom_affiche = nouvelle_ent.raison_sociale or f"{nouvelle_ent.prenom or ''} {nouvelle_ent.nom or ''}".strip()
+    # 
+    # # Email
+    # try:
+    #     from ..core.email import send_welcome_email
+    #     send_welcome_email(req.email_contact, nom_affiche, password)
+    # except Exception as e:
+    #     print(f"Erreur envoi email: {e}")
+    #     
+    # # WhatsApp
+    # try:
+    #     if req.telephone_contact:
+    #         num_wa = format_moroccan_phone(req.telephone_contact)
+    #         msg_wa = f"Bonjour {nom_affiche},\n\nVotre compte a bien été créé ! Voici vos identifiants d'accès :\nEmail : {req.email_contact}\nMot de passe : {password}\n\nBienvenue parmi nous !"
+    #         send_whatsapp_message(num_wa, msg_wa)
+    # except Exception as e:
+    #     print(f"Erreur envoi whatsapp: {e}")
     
     return {
         "message": "Inscription créée et validée avec succès",
@@ -557,14 +596,8 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
         "entreprise_id": nouvelle_ent.id
     }
 
-# Route optionnelle pour créer un adhérent de test facilement
-@router.post("/adherents", response_model=AdherentResponse)
-def create_adherent(adherent: AdherentCreate, db: Session = Depends(get_db)):
-    db_adherent = Adherent(**adherent.dict())
-    db.add(db_adherent)
-    db.commit()
-    db.refresh(db_adherent)
-    return db_adherent
+# Route supprimée : create_adherent utilisait l'ancien modèle Adherent inexistant dans la nouvelle DB
+# Utilisez POST /inscriptions pour créer un adhérent
 
 from ..schemas.carte import CarteAdherentResponse
 from datetime import timedelta
@@ -601,7 +634,7 @@ def get_cartes(db: Session = Depends(get_db)):
             prenom=ent.prenom,
             profession=ent.profession,
             numero_patente=ent.numero_patente,
-            rc=ent.tax_professionnelle,
+            rc=ent.rc,
             annee_validite=annee_val,
             photo_path=photo_path,
         ))
@@ -829,16 +862,28 @@ async def create_communication(
     elif canal.lower() == "notification":
         metrique = "Distribué"
         
+    # 3. Créer le log Communication (sans destinataires_ids)
     comm = Communication(
         titre=titre,
         canal=canal,
         contenu=contenu,
         evenement_id=evenement_id,
-        destinataires_ids=json.dumps(target_ids),
         nombre_destinataires=len(target_ids),
         statut_ou_metrique=metrique
     )
     db.add(comm)
+
+    # 3b. Créer les enregistrements EnvoiCommunication par destinataire
+    from ..models.communication import EnvoiCommunication
+    db.flush()  # Pour avoir comm.id
+    for eid in target_ids:
+        envoi = EnvoiCommunication(
+            communication_id=comm.id,
+            entreprise_id=eid,
+            statut_envoi="en_attente"
+        )
+        db.add(envoi)
+
     db.commit()
     
     return {
@@ -928,7 +973,7 @@ def get_evenements(db: Session = Depends(get_db)):
     evts = upcoming + past
     result = []
     for e in evts:
-        participant_count = db.query(Participation).filter(Participation.evenement_id == e.id).count()
+        participant_count = db.query(Participation).filter(Participation.id_evenement == e.id).count()
         places = e.places_limitees or 0
         progress = round((participant_count / places * 100), 1) if places > 0 else 0
         result.append({
@@ -1111,8 +1156,8 @@ def delete_evenement(evenement_id: int, db: Session = Depends(get_db)):
     if not evt:
         raise HTTPException(status_code=404, detail="Événement introuvable")
     
-    # Delete participations
-    db.query(Participation).filter(Participation.evenement_id == evenement_id).delete()
+    # Delete participations (via les deux colonnes possibles)
+    db.query(Participation).filter(Participation.id_evenement == evenement_id).delete()
     
     # Update communications to remove reference
     db.query(Communication).filter(Communication.evenement_id == evenement_id).update({"evenement_id": None})
@@ -1172,7 +1217,7 @@ def get_cibles(db: Session = Depends(get_db)):
             result.append({
                 "type": type_key,
                 "label": CIBLE_LABELS[type_key],
-                "elements": [{"id": el.id, "nom": el.nom} for el in elements]
+                "elements": [{"id": el.id, "nom": el.titre} for el in elements]
             })
         except Exception as e:
             # Table peut ne pas exister encore — on skip
@@ -1203,14 +1248,14 @@ def get_adherents_by_cible(type_cible: str, element_id: int, db: Session = Depen
     adherents_result = []
 
     if type_cible == "evenement":
-        # Recherche via la colonne evenement_id de participation
+        # Recherche via la colonne id_evenement de participation
         parts = db.query(Participation).filter(
-            Participation.evenement_id == element_id
+            Participation.id_evenement == element_id
         ).all()
         for p in parts:
-            if not p.entreprise_id:
+            if not p.id_adherent:
                 continue
-            ent = db.query(Entreprise).filter(Entreprise.id == p.entreprise_id).first()
+            ent = db.query(Entreprise).filter(Entreprise.id == p.id_adherent).first()
             if ent:
                 nom = ent.raison_sociale if ent.raison_sociale else f"{ent.prenom or ''} {ent.nom or ''}".strip()
                 adherents_result.append({
@@ -1223,10 +1268,19 @@ def get_adherents_by_cible(type_cible: str, element_id: int, db: Session = Depen
                 })
     elif type_cible in PARTICIPATION_FK:
         fk_col = PARTICIPATION_FK[type_cible]
-        # Recherche par colonne FK dans participation
+        # Adaptation : mapper les anciens noms de colonnes FK vers les nouveaux
+        PARTICIPATION_FK_NEW = {
+            "publication": "id_publication",
+            "formation": "id_formation",
+            "prospection": "id_prospection",
+            "assistance_tpe": "id_assistance",
+            "guichet": "id_guichet",
+            "location_salles": "id_salle",
+        }
+        fk_col_new = PARTICIPATION_FK_NEW.get(type_cible, fk_col)
         from sqlalchemy import text as sql_text
         rows = db.execute(
-            sql_text(f"SELECT DISTINCT entreprise_id FROM participation WHERE {fk_col} = :eid AND entreprise_id IS NOT NULL"),
+            sql_text(f"SELECT DISTINCT id_adherent FROM participation WHERE {fk_col_new} = :eid AND id_adherent IS NOT NULL"),
             {"eid": element_id}
         ).fetchall()
         for row in rows:
@@ -1262,17 +1316,26 @@ def create_participation(
     from datetime import date as date_type
 
     kwargs = {
-        "entreprise_id": entreprise_id,
-        "type_cible": type_cible,
+        "id_adherent": entreprise_id,
         "date_inscription": date_type.today(),
         "statut": statut,
         "notes": notes or None,
     }
 
     if type_cible == "evenement":
-        kwargs["evenement_id"] = element_id
+        kwargs["id_evenement"] = element_id
     elif type_cible in PARTICIPATION_FK:
-        kwargs[PARTICIPATION_FK[type_cible]] = element_id
+        PARTICIPATION_FK_NEW_COLS = {
+            "publication": "id_publication",
+            "formation": "id_formation",
+            "prospection": "id_prospection",
+            "assistance_tpe": "id_assistance",
+            "guichet": "id_guichet",
+            "location_salles": "id_salle",
+        }
+        new_fk = PARTICIPATION_FK_NEW_COLS.get(type_cible)
+        if new_fk:
+            kwargs[new_fk] = element_id
     else:
         raise HTTPException(status_code=400, detail=f"Type de cible inconnu : {type_cible}")
 
@@ -1280,5 +1343,5 @@ def create_participation(
     db.add(participation)
     db.commit()
     db.refresh(participation)
-    return {"message": "Participation enregistrée", "id": participation.id}
+    return {"message": "Participation enregistrée", "id": participation.id_participation}
 

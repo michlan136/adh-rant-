@@ -9,12 +9,12 @@ class Entreprise(Base):
     raison_sociale = Column(String, nullable=True)
     telephone = Column(String, nullable=True)
     email = Column(String, nullable=True)
-    documents = Column(String, nullable=True)  # JSON string storing imported document metadata
+    # Note : le champ 'documents' n'existe pas dans gestion_adherent
+    # Les documents sont gérés dans la table 'document' séparée
     nom = Column(String, nullable=True)
     prenom = Column(String, nullable=True)
     adresse = Column(Text, nullable=True)
     date_creation = Column(Date, nullable=True)
-    effetive = Column(String, nullable=True) # Assuming string from schema dump
     ice = Column(String, nullable=True)
     tax_professionnelle = Column(String, nullable=True)
     description_activite = Column(Text, nullable=True)
@@ -30,4 +30,11 @@ class Entreprise(Base):
     date_naissance = Column(Date, nullable=True)
     profession = Column(String, nullable=True)
     numero_patente = Column(String, nullable=True)
+    rc = Column(String, nullable=True)
+    secteur_activite = Column(String, nullable=True)
+    numero_registre = Column(String, nullable=True)
+    numero_auto_entrepreneur = Column(String, nullable=True)
+    objet_association = Column(Text, nullable=True)
+    nom_president = Column(String, nullable=True)
+    liste_membres_bureau = Column(Text, nullable=True)
     photo_url = Column(String, nullable=True)

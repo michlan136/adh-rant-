@@ -39,14 +39,14 @@ from ..models.participation import Participation
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Map type_cible → colonne FK dans participation
+# Map type_cible → nouvelle colonne FK dans participation
 PARTICIPATION_FK_MAP = {
-    "publication": "publication_id",
-    "formation": "formation_id",
-    "prospection": "prospection_id",
-    "assistance_tpe": "assistance_tpe_id",
-    "guichet": "guichet_id",
-    "location_salles": "location_salles_id",
+    "publication": "id_publication",
+    "formation": "id_formation",
+    "prospection": "id_prospection",
+    "assistance_tpe": "id_assistance",
+    "guichet": "id_guichet",
+    "location_salles": "id_salle",
 }
 
 
@@ -120,10 +120,10 @@ def _resolve_target_ids(
                 status_code=422,
                 detail="Le champ 'evenement_id' est obligatoire quand cible='evenement'.",
             )
-        rows = db.query(Participation.entreprise_id).filter(
-            Participation.evenement_id == evenement_id
+        rows = db.query(Participation.id_adherent).filter(
+            Participation.id_evenement == evenement_id
         ).all()
-        target_ids = [r.entreprise_id for r in rows if r.entreprise_id]
+        target_ids = [r.id_adherent for r in rows if r.id_adherent]
 
     elif cible in PARTICIPATION_FK_MAP:
         if not evenement_id:
@@ -133,7 +133,7 @@ def _resolve_target_ids(
             )
         fk_col = PARTICIPATION_FK_MAP[cible]
         rows = db.execute(
-            sql_text(f"SELECT DISTINCT entreprise_id FROM participation WHERE {fk_col} = :eid AND entreprise_id IS NOT NULL"),
+            sql_text(f"SELECT DISTINCT id_adherent FROM participation WHERE {fk_col} = :eid AND id_adherent IS NOT NULL"),
             {"eid": evenement_id}
         ).fetchall()
         target_ids = [row[0] for row in rows]
@@ -249,11 +249,10 @@ async def send_whatsapp_broadcast(
             shutil.copyfileobj(attachment.file, buffer)
         logger.info(f"[WhatsApp] Pièce jointe : {attachment_name} → {attachment_path}")
 
-    # ── 4. Sauvegarde dans l'historique ──────────────────────────────────────
+    # ── 4. Sauvegarde dans l'historique ────────────────────────────────────────────
     metrique = (
         f"Envoi simultané → {len(valid_phones)} numéro(s) valide(s)"
         + (f" | {invalid_count} ignoré(s)" if invalid_count else "")
-        + (f" | PJ: {attachment_name}" if attachment_name else "")
     )
     comm = Communication(
         titre=titre,
@@ -261,11 +260,23 @@ async def send_whatsapp_broadcast(
         contenu=contenu,
         date_envoi=datetime.utcnow(),
         evenement_id=evenement_id,
-        destinataires_ids=json_lib.dumps(target_ids),
         nombre_destinataires=len(target_ids),
         statut_ou_metrique=metrique,
+        piece_jointe_nom=attachment_name,
     )
     db.add(comm)
+    db.flush()  # Pour avoir comm.id avant les envoi_communication
+
+    # Créer les enregistrements EnvoiCommunication par destinataire
+    from ..models.communication import EnvoiCommunication
+    for eid in target_ids:
+        envoi = EnvoiCommunication(
+            communication_id=comm.id,
+            entreprise_id=eid,
+            statut_envoi="en_attente"
+        )
+        db.add(envoi)
+
     db.commit()
     db.refresh(comm)
 

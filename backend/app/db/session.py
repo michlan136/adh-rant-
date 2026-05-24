@@ -2,16 +2,15 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-import os
+load_dotenv(override=True)
 
 # ==========================================
 # CONFIGURATION DE LA BASE DE DONNÉES
 # ==========================================
-# 1. On a remplacé le '@' du mot de passe par '%40'
-# 2. On utilise os.getenv pour lire la variable de Render en priorité
-fallback_url = "postgresql://postgres.xkrutionxnzqkthowair:E6%40ZFb!Ra.e3JYb@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
-DATABASE_URL = os.getenv("DATABASE_URL", fallback_url)
+# Lecture depuis .env  →  DATABASE_URL=postgresql://postgres:michlan@localhost:5432/gestion_adherent
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:michlan@localhost:5432/gestion_adherent")
 
 # Correction de sécurité au cas où Render injecterait postgres:// au lieu de postgresql://
 if DATABASE_URL.startswith("postgres://"):

@@ -9,12 +9,9 @@ Traceback (most recent call last):
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-psycopg2.OperationalError: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+psycopg2.errors.UndefinedColumn: ERREUR:  la colonne entreprise.documents n'existe pas
+LINE 1: ..._telephone, entreprise.email AS entreprise_email, entreprise...
+                                                             ^
 
 
 The above exception was the direct cause of the following exception:
@@ -71,15 +68,11 @@ Traceback (most recent call last):
            ^^^^^^^^^^^^
   File "C:\stage_projet\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
     result = context.run(func, *args)
-  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 45, in get_dashboard_stats
-    total = db.query(Entreprise.id).filter(Entreprise.est_valide == True).count()
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 3153, in count
-    self._legacy_from_self(col).enable_eagerloads(False).scalar()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2842, in scalar
-    ret = self.one()
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2815, in one
-    return self._iter().one()  # type: ignore
+  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 96, in get_adherents
+    .all()
+     ~~~^^
+  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2711, in all
+    return self._iter().all()  # type: ignore
            ~~~~~~~~~~^^
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\query.py", line 2864, in _iter
     result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
@@ -161,15 +154,10 @@ Traceback (most recent call last):
   File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) ERREUR:  la colonne entreprise.documents n'existe pas
+LINE 1: ..._telephone, entreprise.email AS entreprise_email, entreprise...
+                                                             ^
 
-[SQL: SELECT count(*) AS count_1 
-FROM (SELECT entreprise.id AS entreprise_id 
-FROM entreprise 
-WHERE entreprise.est_valide = true) AS anon_1]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
+[SQL: SELECT entreprise.id AS entreprise_id, entreprise.raison_sociale AS entreprise_raison_sociale, entreprise.telephone AS entreprise_telephone, entreprise.email AS entreprise_email, entreprise.documents AS entreprise_documents, entreprise.nom AS entreprise_nom, entreprise.prenom AS entreprise_prenom, entreprise.adresse AS entreprise_adresse, entreprise.date_creation AS entreprise_date_creation, entreprise.effetive AS entreprise_effetive, entreprise.ice AS entreprise_ice, entreprise.tax_professionnelle AS entreprise_tax_professionnelle, entreprise.description_activite AS entreprise_description_activite, entreprise.donnees_extra AS entreprise_donnees_extra, entreprise.effectif_id AS entreprise_effectif_id, entreprise.ca_id AS entreprise_ca_id, entreprise.forme_juridique_id AS entreprise_forme_juridique_id, entreprise.marque_id AS entreprise_marque_id, entreprise.ville_id AS entreprise_ville_id, entreprise.est_valide AS entreprise_est_valide, entreprise.derniere_connexion_activite AS entreprise_derniere_connexion_activite, entreprise.cin AS entreprise_cin, entreprise.date_naissance AS entreprise_date_naissance, entreprise.profession AS entreprise_profession, entreprise.numero_patente AS entreprise_numero_patente, entreprise.photo_url AS entreprise_photo_url, login.id AS login_id, login.email AS login_email, login.mot_de_passe AS login_mot_de_passe, login.role AS login_role, login.entreprise_id AS login_entreprise_id, login.est_active AS login_est_active 
+FROM entreprise LEFT OUTER JOIN login ON login.entreprise_id = entreprise.id]
+(Background on this error at: https://sqlalche.me/e/20/f405)
