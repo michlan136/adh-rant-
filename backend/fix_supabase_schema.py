@@ -4,10 +4,10 @@ from app.models.entreprise import Entreprise
 from app.models.renouvellement import Renouvellement
 from app.models.evenement import Evenement
 from app.models.communication import Communication
-from app.models.demande_inscription import DemandeInscription
+from app.models.inscription import DemandeInscription
 from app.models.login import Login
 from app.models.carte import CarteAdherent
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 try:
     print("Connecting to Supabase to check schema differences...")
@@ -47,7 +47,7 @@ try:
                     alter_query = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type_str};'
                     print(f"  Running: {alter_query}")
                     try:
-                        conn.execute(psycopg2.sql.SQL(alter_query) if hasattr(psycopg2, 'sql') else alter_query)
+                        conn.execute(text(alter_query))
                         conn.commit()
                         print("  [SUCCESS] Column added!")
                     except Exception as err:
