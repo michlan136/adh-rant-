@@ -32,6 +32,7 @@ class AdherentUpdate(BaseModel):
     tax_professionnelle: Optional[str] = None
     description_activite: Optional[str] = None
     photo_url: Optional[str] = None
+    donnees_extra: Optional[dict] = None
 
 class AdherentResponse(AdherentBase):
     id: int
@@ -47,6 +48,7 @@ class AdherentResponse(AdherentBase):
     ice: Optional[str] = None
     mot_de_passe: Optional[str] = None
     photo_url: Optional[str] = None
+    donnees_extra: Optional[dict] = None
 
     class Config:
         from_attributes = True

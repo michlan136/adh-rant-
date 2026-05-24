@@ -7,6 +7,7 @@ import random
 import shutil
 import os
 import uuid
+import json
 from datetime import datetime, date, timedelta
 
 from ..core.whatsapp import send_whatsapp_message, format_moroccan_phone
@@ -138,7 +139,8 @@ def get_adherents(db: Session = Depends(get_db)):
             tax_professionnelle=ent.tax_professionnelle,
             description_activite=ent.description_activite,
             ice=ent.ice,
-            mot_de_passe=login.mot_de_passe if login else None
+            mot_de_passe=login.mot_de_passe if login else None,
+            donnees_extra=json.loads(ent.donnees_extra) if ent.donnees_extra else None
         ))
     return adherents_list
 
@@ -177,6 +179,9 @@ def update_adherent(adherent_id: int, payload: AdherentUpdate, db: Session = Dep
         ent.tax_professionnelle = payload.tax_professionnelle
     if payload.description_activite is not None:
         ent.description_activite = payload.description_activite
+    if payload.donnees_extra is not None:
+        import json
+        ent.donnees_extra = json.dumps(payload.donnees_extra)
     if payload.statut is not None:
         is_becoming_active = (payload.statut == "Actif" and not ent.est_valide)
         ent.est_valide = (payload.statut == "Actif")
@@ -388,12 +393,13 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
         tax_professionnelle=req.rc,
         description_activite=req.activite_principale,
         date_creation=date_creation_parsed or datetime.utcnow().date(),
-        est_valide=False,
+        est_valide=True,
         cin=req.cin,
         date_naissance=date_naissance_parsed,
         profession=req.profession,
         numero_patente=req.numero_patente,
         documents=req.documents,
+        donnees_extra=req.model_dump_json(exclude={"documents", "evenement_ids"}),
     )
     db.add(nouvelle_ent)
     db.flush()  # Récupérer l'ID
@@ -482,16 +488,67 @@ def creer_inscription(req: NouvelleInscriptionRequest, db: Session = Depends(get
             if evt:
                 participation = Participation(
                     entreprise_id=nouvelle_ent.id,
+                    type_cible="evenement",
                     evenement_id=eid,
                     date_inscription=date_type.today(),
                     statut="inscrit"
                 )
                 db.add(participation)
 
+    # 8. Créer les participations pour les autres services demandés
+    if req.services_demandes:
+        from ..models.cibles import Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles
+        from datetime import date as date_type
+        
+        cible_models_map = {
+            "publication": (Publication, "publication_id"),
+            "formation": (Formation, "formation_id"),
+            "prospection": (Prospection, "prospection_id"),
+            "assistance_tpe": (AssistanceTPE, "assistance_tpe_id"),
+            "guichet": (Guichet, "guichet_id"),
+            "location_salles": (LocationSalles, "location_salles_id"),
+        }
+        
+        for service_name in req.services_demandes:
+            for type_cible, (model, fk_field) in cible_models_map.items():
+                try:
+                    element = db.query(model).filter(model.nom == service_name).first()
+                    if element:
+                        participation = Participation(
+                            entreprise_id=nouvelle_ent.id,
+                            type_cible=type_cible,
+                            date_inscription=date_type.today(),
+                            statut="inscrit"
+                        )
+                        setattr(participation, fk_field, element.id)
+                        db.add(participation)
+                        break
+                except Exception:
+                    pass
+
     # Génération automatique de la carte
     _generer_carte_pour_entreprise(nouvelle_ent, db)
 
     db.commit()
+    
+    # Envoi des identifiants par email et WhatsApp
+    nom_affiche = nouvelle_ent.raison_sociale or f"{nouvelle_ent.prenom or ''} {nouvelle_ent.nom or ''}".strip()
+    
+    # Email
+    try:
+        from ..core.email import send_welcome_email
+        send_welcome_email(req.email_contact, nom_affiche, password)
+    except Exception as e:
+        print(f"Erreur envoi email: {e}")
+        
+    # WhatsApp
+    try:
+        if req.telephone_contact:
+            num_wa = format_moroccan_phone(req.telephone_contact)
+            msg_wa = f"Bonjour {nom_affiche},\n\nVotre compte a bien été créé ! Voici vos identifiants d'accès :\nEmail : {req.email_contact}\nMot de passe : {password}\n\nBienvenue parmi nous !"
+            send_whatsapp_message(num_wa, msg_wa)
+    except Exception as e:
+        print(f"Erreur envoi whatsapp: {e}")
     
     return {
         "message": "Inscription créée et validée avec succès",
@@ -1064,3 +1121,164 @@ def delete_evenement(evenement_id: int, db: Session = Depends(get_db)):
     db.delete(evt)
     db.commit()
     return {"message": "Événement supprimé avec succès"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CIBLES DE COMMUNICATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+from ..models.cibles import Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles
+
+CIBLE_MODELS = {
+    "publication": Publication,
+    "formation": Formation,
+    "prospection": Prospection,
+    "assistance_tpe": AssistanceTPE,
+    "guichet": Guichet,
+    "location_salles": LocationSalles,
+}
+
+CIBLE_LABELS = {
+    "publication": "PUBLICATION",
+    "formation": "FORMATION",
+    "prospection": "PROSPECTION",
+    "assistance_tpe": "ASSISTANCE TPE",
+    "guichet": "GUICHET",
+    "location_salles": "LOCATION DES SALLES",
+}
+
+PARTICIPATION_FK = {
+    "publication": "publication_id",
+    "formation": "formation_id",
+    "prospection": "prospection_id",
+    "assistance_tpe": "assistance_tpe_id",
+    "guichet": "guichet_id",
+    "location_salles": "location_salles_id",
+}
+
+
+@router.get("/cibles")
+def get_cibles(db: Session = Depends(get_db)):
+    """
+    Retourne toutes les catégories de cibles avec leurs sous-éléments.
+    Structure : [{ type, label, elements: [{id, nom}] }]
+    """
+    result = []
+
+    # Tables configurables
+    for type_key, model in CIBLE_MODELS.items():
+        try:
+            elements = db.query(model).filter(model.actif == True).order_by(model.id).all()
+            result.append({
+                "type": type_key,
+                "label": CIBLE_LABELS[type_key],
+                "elements": [{"id": el.id, "nom": el.nom} for el in elements]
+            })
+        except Exception as e:
+            # Table peut ne pas exister encore — on skip
+            result.append({
+                "type": type_key,
+                "label": CIBLE_LABELS[type_key],
+                "elements": [],
+                "error": str(e)
+            })
+
+    # Ajouter les événements comme catégorie spéciale
+    evenements = db.query(Evenement).order_by(Evenement.date_evenement.desc()).all()
+    result.append({
+        "type": "evenement",
+        "label": "ÉVÉNEMENT",
+        "elements": [{"id": ev.id, "nom": f"{ev.titre} ({str(ev.date_evenement)})"} for ev in evenements]
+    })
+
+    return result
+
+
+@router.get("/cibles/{type_cible}/{element_id}/adherents")
+def get_adherents_by_cible(type_cible: str, element_id: int, db: Session = Depends(get_db)):
+    """
+    Retourne les adhérents inscrits dans un élément d'une cible spécifique.
+    Ex: /cibles/formation/1/adherents → adhérents inscrits au cycle court (id=1)
+    """
+    adherents_result = []
+
+    if type_cible == "evenement":
+        # Recherche via la colonne evenement_id de participation
+        parts = db.query(Participation).filter(
+            Participation.evenement_id == element_id
+        ).all()
+        for p in parts:
+            if not p.entreprise_id:
+                continue
+            ent = db.query(Entreprise).filter(Entreprise.id == p.entreprise_id).first()
+            if ent:
+                nom = ent.raison_sociale if ent.raison_sociale else f"{ent.prenom or ''} {ent.nom or ''}".strip()
+                adherents_result.append({
+                    "id": ent.id,
+                    "nom": nom or "Inconnu",
+                    "email": ent.email or "",
+                    "telephone": ent.telephone or "",
+                    "reference": f"ENT-{ent.id:04d}",
+                    "statut": "Actif" if ent.est_valide else "Inactif",
+                })
+    elif type_cible in PARTICIPATION_FK:
+        fk_col = PARTICIPATION_FK[type_cible]
+        # Recherche par colonne FK dans participation
+        from sqlalchemy import text as sql_text
+        rows = db.execute(
+            sql_text(f"SELECT DISTINCT entreprise_id FROM participation WHERE {fk_col} = :eid AND entreprise_id IS NOT NULL"),
+            {"eid": element_id}
+        ).fetchall()
+        for row in rows:
+            ent = db.query(Entreprise).filter(Entreprise.id == row[0]).first()
+            if ent:
+                nom = ent.raison_sociale if ent.raison_sociale else f"{ent.prenom or ''} {ent.nom or ''}".strip()
+                adherents_result.append({
+                    "id": ent.id,
+                    "nom": nom or "Inconnu",
+                    "email": ent.email or "",
+                    "telephone": ent.telephone or "",
+                    "reference": f"ENT-{ent.id:04d}",
+                    "statut": "Actif" if ent.est_valide else "Inactif",
+                })
+    else:
+        raise HTTPException(status_code=400, detail=f"Type de cible inconnu : {type_cible}")
+
+    return adherents_result
+
+
+@router.post("/participations")
+def create_participation(
+    entreprise_id: int = Form(...),
+    type_cible: str = Form(...),
+    element_id: int = Form(...),
+    statut: str = Form(default="inscrit"),
+    notes: str = Form(default=""),
+    db: Session = Depends(get_db)
+):
+    """
+    Enregistre la participation d'un adhérent à une cible donnée.
+    """
+    from datetime import date as date_type
+
+    kwargs = {
+        "entreprise_id": entreprise_id,
+        "type_cible": type_cible,
+        "date_inscription": date_type.today(),
+        "statut": statut,
+        "notes": notes or None,
+    }
+
+    if type_cible == "evenement":
+        kwargs["evenement_id"] = element_id
+    elif type_cible in PARTICIPATION_FK:
+        kwargs[PARTICIPATION_FK[type_cible]] = element_id
+    else:
+        raise HTTPException(status_code=400, detail=f"Type de cible inconnu : {type_cible}")
+
+    participation = Participation(**kwargs)
+    db.add(participation)
+    db.commit()
+    db.refresh(participation)
+    return {"message": "Participation enregistrée", "id": participation.id}
+

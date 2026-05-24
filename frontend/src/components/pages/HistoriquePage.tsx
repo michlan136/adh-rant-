@@ -63,14 +63,14 @@ export default function HistoriquePage() {
             <div style={{ fontSize: 24 }}>{s.icon}</div>
             <div>
               <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{s.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{s.label}</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, background: 'white', padding: 6, borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, background: 'var(--surface)', padding: 6, borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
         {filterTabs.map(tab => (
           <button key={tab} onClick={() => setActiveFilter(tab)}
             style={{
@@ -86,9 +86,9 @@ export default function HistoriquePage() {
 
       {/* Timeline */}
       {loading ? (
-        <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>Chargement...</div>
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)' }}>Chargement...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ background: 'white', borderRadius: 16, padding: '40px 20px', textAlign: 'center', color: '#94a3b8' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 16, padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
           <p style={{ fontWeight: 600 }}>Aucune activité trouvée.</p>
         </div>
@@ -101,11 +101,11 @@ export default function HistoriquePage() {
             return (
               <div key={i} style={{ position: 'relative', marginBottom: 16, animation: `fadeIn .3s ease ${i * 0.05}s both` }}>
                 <div style={{ position: 'absolute', left: -24, top: 6, width: 14, height: 14, borderRadius: '50%', background: c, border: '3px solid white', boxShadow: '0 2px 6px rgba(0,0,0,.15)' }} />
-                <div style={{ background: 'white', borderRadius: 16, padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,.04)', border: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ background: 'var(--surface)', borderRadius: 16, padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,.04)', border: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: '0 0 4px' }}>{item.titre}</h4>
-                    <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 6px' }}>{item.description}</p>
-                    <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#94a3b8' }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>{item.titre}</h4>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{item.description}</p>
+                    <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
                       <span>📅 {item.date}</span>
                       {item.heure && <span>🕐 {item.heure}</span>}
                     </div>
@@ -122,7 +122,7 @@ export default function HistoriquePage() {
                           montant: item.montant,
                           annee: item.annee
                         })}
-                        style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#4f46e5', cursor: 'pointer' }}
+                        style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#4f46e5', cursor: 'pointer' }}
                       >
                         Voir le reçu
                       </button>

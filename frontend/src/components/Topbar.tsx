@@ -39,6 +39,19 @@ export default function Topbar({ onNavigate }: TopbarProps) {
         </div>
       </div>
       <div className="topbar-right">
+        {/* ── Theme Toggle ── */}
+        <button
+          onClick={() => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+          }}
+          className="notif-btn"
+          title="Changer de thème"
+          style={{ marginRight: '8px' }}
+        >
+          <i className="fas fa-moon" style={{ fontSize: '15px' }} />
+        </button>
+
         <div className="notif-btn" onClick={() => onNavigate('notifications')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -80,14 +80,14 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 850, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-        <div style={{ padding: '20px 32px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1e293b' }}>Aperçu du Reçu</h3>
+      <div style={{ background: 'var(--surface)', borderRadius: 24, width: '100%', maxWidth: 850, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div style={{ padding: '20px 32px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>Aperçu du Reçu</h3>
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={handlePrint} style={{ background: '#4f46e5', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
               🖨️ Imprimer / PDF
             </button>
-            <button onClick={onClose} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px 20px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Fermer</button>
+            <button onClick={onClose} style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: 'none', padding: '10px 20px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Fermer</button>
           </div>
         </div>
 
@@ -95,52 +95,52 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
           <div className="header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 60 }}>
             <div className="logo-section">
               <h1 style={{ margin: 0, color: '#1e1b4b', fontSize: 28, letterSpacing: 1 }}>ADH-RANT</h1>
-              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Portail Membre Officiel</p>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: 14 }}>Portail Membre Officiel</p>
             </div>
             <div className="title-section" style={{ textAlign: 'right' }}>
               <h2 style={{ margin: 0, color: '#1e1b4b', fontSize: 20, fontWeight: 800 }}>REÇU DE PAIEMENT</h2>
-              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>Réf: #{data.ref}</p>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: 14 }}>Réf: #{data.ref}</p>
             </div>
           </div>
 
           <div className="info-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginBottom: 60 }}>
             <div className="info-box">
-              <h3 style={{ fontSize: 11, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 8, letterSpacing: 1 }}>ÉMIS POUR</h3>
-              <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{data.nom}</p>
-              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Identifiant: {data.adherent_id}</span>
+              <h3 style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8, letterSpacing: 1 }}>ÉMIS POUR</h3>
+              <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{data.nom}</p>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Identifiant: {data.adherent_id}</span>
             </div>
             <div className="info-box" style={{ textAlign: 'right' }}>
-              <h3 style={{ fontSize: 11, textTransform: 'uppercase', color: '#94a3b8', marginBottom: 8, letterSpacing: 1 }}>DÉTAILS DE TRANSACTION</h3>
-              <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Date: {data.date}</p>
-              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Mode: {data.mode.toUpperCase()}</span>
+              <h3 style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8, letterSpacing: 1 }}>DÉTAILS DE TRANSACTION</h3>
+              <p style={{ margin: '2px 0', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Date: {data.date}</p>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Mode: {data.mode.toUpperCase()}</span>
             </div>
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 40 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', fontSize: 11, textTransform: 'uppercase', color: '#94a3b8', paddingBottom: 12, borderBottom: '1px solid #eee' }}>DESCRIPTION</th>
-                <th style={{ textAlign: 'right', fontSize: 11, textTransform: 'uppercase', color: '#94a3b8', paddingBottom: 12, borderBottom: '1px solid #eee' }}>MONTANT</th>
+                <th style={{ textAlign: 'left', fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', paddingBottom: 12, borderBottom: '1px solid #eee' }}>DESCRIPTION</th>
+                <th style={{ textAlign: 'right', fontSize: 11, textTransform: 'uppercase', color: 'var(--text-muted)', paddingBottom: 12, borderBottom: '1px solid #eee' }}>MONTANT</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td style={{ padding: '20px 0', borderBottom: '1px solid #eee' }}>
-                  <h4 style={{ margin: 0, fontSize: 15, color: '#1e293b' }}>Renouvellement d'adhésion annuelle</h4>
-                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>Période {data.annee} - {data.annee + 1}</p>
+                  <h4 style={{ margin: 0, fontSize: 15, color: 'var(--text-primary)' }}>Renouvellement d'adhésion annuelle</h4>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>Période {data.annee} - {data.annee + 1}</p>
                 </td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #eee' }}>{data.montant} MAD</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid #eee' }}>{data.montant} MAD</td>
               </tr>
             </tbody>
           </table>
 
           <div className="totals" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', width: 200 }}>
-              <label style={{ fontSize: 13, color: '#64748b' }}>Sous-total</label>
+              <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Sous-total</label>
               <span style={{ fontWeight: 600 }}>{data.montant} MAD</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', width: 200, marginTop: 10, paddingTop: 10, borderTop: '2px solid #1e1b4b' }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Total Payé</label>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Total Payé</label>
               <span style={{ fontWeight: 800, fontSize: 18, color: '#1e1b4b' }}>{data.montant} MAD</span>
             </div>
           </div>

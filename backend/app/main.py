@@ -41,6 +41,8 @@ from .models.notification import Notification
 from .models.adhesion import Adhesion
 from .models.communication import Communication
 from .models.finance import Fournisseur, Depense
+# Nouveaux modèles cibles de communication
+from .models.cibles import Publication, Formation, Prospection, AssistanceTPE, Guichet, LocationSalles
 from .schemas.login import LoginRequest
 from .core.security import create_access_token
 

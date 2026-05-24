@@ -41,9 +41,9 @@ const SERVICES_CATEGORIES = {
   'Location salles': ['Amphithéâtre', 'Salle polyvalente', 'Salle conférence', 'Salle formation', 'Salle exposition'],
 };
 
-export default function InscriptionForm() {
+export default function InscriptionForm({ onSuccess }: { onSuccess?: (data: any) => void }) {
   const [formeJuridique, setFormeJuridique] = useState(FORMES_JURIDIQUES[0]);
-
+  
   // État global du formulaire
   const [formData, setFormData] = useState({
     nom: '', prenom: '', adresse: '', ville: '', telGsm: '', telFixe: '', email: '',
@@ -167,9 +167,9 @@ export default function InscriptionForm() {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      alert(
-        `Inscription créée et enregistrée en base !\n\nEmail : ${res.email}\nMot de passe généré : ${res.password_genere}\n\nCes identifiants ont été sauvegardés.`
-      );
+      if (onSuccess) {
+        onSuccess(res);
+      }
     } catch (err: any) {
       alert(`Erreur lors de l'enregistrement : ${err?.message || 'Email peut-être déjà utilisé.'}`);
     } finally {

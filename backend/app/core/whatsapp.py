@@ -280,16 +280,19 @@ async def send_whatsapp_batch(
     message: str,
     communication_id: int,
     max_concurrent: int = MAX_CONCURRENT_SENDS,
+    attachment_path: Optional[str] = None,
+    attachment_name: Optional[str] = None,
 ) -> tuple[int, int]:
     """
-    Envoie le même message à tous les numéros de façon SIMULTANÉE.
-    Un sémaphore limite la concurrence pour respecter les rate limits API.
+    Envoie le même message (+ pièce jointe optionnelle) à tous les numéros de façon SIMULTANÉE.
 
     Args:
         phones           : Liste de numéros bruts.
         message          : Corps du message.
         communication_id : ID pour les logs de traçabilité.
         max_concurrent   : Nombre max d'envois parallèles (défaut: 10).
+        attachment_path  : Chemin local du fichier à envoyer (optionnel).
+        attachment_name  : Nom original du fichier (optionnel).
 
     Returns:
         Tuple (succès, échecs).
@@ -297,6 +300,7 @@ async def send_whatsapp_batch(
     logger.info(
         f"[Batch][comm_id={communication_id}] Démarrage — "
         f"{len(phones)} destinataires, {max_concurrent} envois simultanés max."
+        + (f" | PJ: {attachment_name}" if attachment_name else "")
     )
 
     semaphore = asyncio.Semaphore(max_concurrent)
@@ -304,9 +308,45 @@ async def send_whatsapp_batch(
     async def _guarded_send(phone: str, client: httpx.AsyncClient) -> bool:
         async with semaphore:
             try:
-                return await send_whatsapp_async(phone, message, client)
+                # Si pièce jointe et gateway Ultramsg configurée → sendFile
+                if attachment_path and os.path.exists(attachment_path) and WHATSAPP_API_URL and WHATSAPP_API_TOKEN:
+                    # Construire l'URL d'envoi de fichier Ultramsg
+                    file_url = WHATSAPP_API_URL.replace("/messages/chat", "/messages/document")
+                    if "/messages/" not in file_url:
+                        file_url = WHATSAPP_API_URL.rstrip("/") + "/../messages/document"
+                    # Lire et envoyer le fichier comme base64 ou URL
+                    # Ultramsg accepte le chemin en tant que document via URL publique ou base64
+                    text_ok = await send_whatsapp_async(phone, message, client)
+                    # Envoi du fichier via Ultramsg sendFile endpoint
+                    with open(attachment_path, "rb") as f:
+                        import base64
+                        file_b64 = base64.b64encode(f.read()).decode("utf-8")
+                    
+                    data = {
+                        "token": WHATSAPP_API_TOKEN,
+                        "to": phone,
+                        "document": file_b64,
+                        "filename": attachment_name or os.path.basename(attachment_path)
+                    }
+                    
+                    try:
+                        resp = await client.post(
+                            file_url,
+                            data=data,
+                            headers={"content-type": "application/x-www-form-urlencoded"},
+                            timeout=60.0,
+                        )
+                        if resp.status_code in (200, 201):
+                            logger.info(f"[Batch] Pièce jointe envoyée avec succès pour {phone}")
+                        else:
+                            logger.error(f"[Batch] Échec envoi PJ pour {phone} — {resp.status_code}: {resp.text[:200]}")
+                    except Exception as e:
+                        logger.error(f"[Batch] Erreur lors de l'envoi de la PJ pour {phone}: {e}")
+                    
+                    return text_ok
+                else:
+                    return await send_whatsapp_async(phone, message, client)
             except Exception as exc:
-                # Bouclier : ne jamais faire planter la boucle asyncio
                 logger.error(
                     f"[Batch][comm_id={communication_id}] "
                     f"Erreur inattendue pour {phone}: {exc}"

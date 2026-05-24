@@ -121,7 +121,7 @@ export default function EvenementsPage() {
           { key: 'tous', label: 'Total', color: '#6366f1' },
           { key: 'disponibles', label: 'Disponibles', color: '#10b981' },
           { key: 'inscrits', label: 'Mes inscriptions', color: '#3b82f6' },
-          { key: 'termines', label: 'Terminés', color: '#94a3b8' },
+          { key: 'termines', label: 'Terminés', color: 'var(--text-muted)' },
         ] as const).map(({ key, label, color }) => (
           <div
             key={key}
@@ -144,7 +144,7 @@ export default function EvenementsPage() {
       </div>
 
       {/* Recherche */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, background: 'white', padding: '12px 16px', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, background: 'var(--surface)', padding: '12px 16px', borderRadius: 14, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={16} height={16}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <input
@@ -154,7 +154,7 @@ export default function EvenementsPage() {
           />
         </div>
         {search && (
-          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18 }}>×</button>
+          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }}>×</button>
         )}
       </div>
 
@@ -165,7 +165,7 @@ export default function EvenementsPage() {
           Chargement des événements...
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: 'white', borderRadius: 16, color: '#64748b' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--surface)', borderRadius: 16, color: 'var(--text-secondary)' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
           <p style={{ fontSize: 16, fontWeight: 600 }}>Aucun événement trouvé.</p>
         </div>
@@ -180,7 +180,7 @@ export default function EvenementsPage() {
 
             return (
               <div key={ev.id} style={{
-                background: 'white', borderRadius: 20,
+                background: 'var(--surface)', borderRadius: 20,
                 overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
                 border: isRegistered ? '2px solid #10b981' : '1px solid #e2e8f0',
                 opacity: isPast ? 0.75 : 1,
@@ -210,13 +210,13 @@ export default function EvenementsPage() {
                 {/* Body */}
                 <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {ev.description && (
-                    <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: 0 }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
                       {ev.description.length > 100 ? ev.description.slice(0, 100) + '...' : ev.description}
                     </p>
                   )}
 
                   {/* Infos */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#64748b' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: 14 }}>📅</span>
                       {new Date(ev.date_evenement).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -234,7 +234,7 @@ export default function EvenementsPage() {
 
                   {/* Participants */}
                   <div style={{ marginTop: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
                       <span>👥 {ev.participants_count} participant{ev.participants_count > 1 ? 's' : ''}{ev.places_limitees ? ` / ${ev.places_limitees}` : ''}</span>
                       {ev.places_limitees && placesLeft !== null && !isPast && (
                         <span style={{ color: placesLeft <= 5 ? '#ef4444' : '#10b981', fontWeight: 700 }}>
@@ -253,14 +253,14 @@ export default function EvenementsPage() {
                       </div>
                     )}
                     {ev.places_limitees && (
-                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{ev.progress}% de remplissage</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{ev.progress}% de remplissage</div>
                     )}
                   </div>
 
                   {/* Bouton */}
                   <div style={{ marginTop: 'auto', paddingTop: 8 }}>
                     {isPast ? (
-                      <button disabled style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: '#e2e8f0', color: '#94a3b8', fontWeight: 700, fontSize: 13, cursor: 'not-allowed' }}>
+                      <button disabled style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: '#e2e8f0', color: 'var(--text-muted)', fontWeight: 700, fontSize: 13, cursor: 'not-allowed' }}>
                         Événement terminé
                       </button>
                     ) : isRegistered ? (

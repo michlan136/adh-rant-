@@ -1,17 +1,13 @@
 """
 Route POST /api/communication/whatsapp
 
-Architecture :
-  • Résolution des destinataires depuis la DB (cible: tous / partie / evenement)
+Améliorations :
+  • Support de toutes les cibles : tous | partie | evenement | formation | prospection | publication | assistance_tpe | guichet | location_salles
+  • Pièce jointe (image, PDF, document) — envoi via Ultramsg /api/sendFile
+  • Multi-cibles : fusion des destinataires de plusieurs cibles
   • Validation stricte des numéros (format E.164)
-  • Sauvegarde immédiate de l'historique dans la table `communication`
-  • Lancement de l'envoi en masse SIMULTANÉ via asyncio.gather (BackgroundTasks)
-  • Expéditeur fixe : whatsapp:+212713571887
-
-Gestion des erreurs :
-  • Chaque envoi individuel est isolé dans un try/except
-  • Un numéro invalide n'interrompt jamais les autres envois
-  • Les erreurs réseau/timeout sont catchées et loggées, jamais reraisées
+  • Sauvegarde de l'historique dans la table `communication`
+  • Envoi simultané via asyncio.gather
 """
 
 from __future__ import annotations
@@ -19,10 +15,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import shutil
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -40,41 +39,15 @@ from ..models.participation import Participation
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Schémas Pydantic
-# ─────────────────────────────────────────────────────────────────────────────
-
-class WhatsAppBroadcastRequest(BaseModel):
-    titre: str = Field(
-        ..., min_length=1, max_length=255,
-        description="Titre / objet de la communication (affiché dans l'historique)"
-    )
-    contenu: str = Field(
-        ..., min_length=1, max_length=4096,
-        description="Corps du message WhatsApp (max 4 096 caractères)"
-    )
-    cible: str = Field(
-        ..., pattern="^(tous|partie|evenement)$",
-        description="Cible : 'tous' | 'partie' | 'evenement'"
-    )
-    evenement_id: Optional[int] = Field(
-        None,
-        description="ID de l'événement (obligatoire si cible='evenement')"
-    )
-    adherent_ids: Optional[List[int]] = Field(
-        None,
-        description="IDs entreprise ciblés (obligatoire si cible='partie')"
-    )
-
-
-class WhatsAppBroadcastResponse(BaseModel):
-    message: str
-    communication_id: int
-    expediteur: str
-    destinataires_total: int
-    numeros_valides: int
-    numeros_invalides: int
+# Map type_cible → colonne FK dans participation
+PARTICIPATION_FK_MAP = {
+    "publication": "publication_id",
+    "formation": "formation_id",
+    "prospection": "prospection_id",
+    "assistance_tpe": "assistance_tpe_id",
+    "guichet": "guichet_id",
+    "location_salles": "location_salles_id",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,21 +58,18 @@ def _run_batch_in_background(
     phones: List[str],
     message: str,
     communication_id: int,
+    attachment_path: Optional[str] = None,
+    attachment_name: Optional[str] = None,
 ) -> None:
-    """
-    Wrapper synchrone exécuté par FastAPI BackgroundTasks.
-    Crée une nouvelle boucle asyncio pour lancer send_whatsapp_batch.
-
-    Chaque appel HTTP est isolé (try/except dans send_whatsapp_batch).
-    Un numéro KO ne fait jamais planter les autres.
-    """
     try:
         success, failure = asyncio.run(
             send_whatsapp_batch(
                 phones=phones,
                 message=message,
                 communication_id=communication_id,
-                max_concurrent=10,  # 10 envois HTTP simultanés
+                max_concurrent=10,
+                attachment_path=attachment_path,
+                attachment_name=attachment_name,
             )
         )
         logger.info(
@@ -107,78 +77,134 @@ def _run_batch_in_background(
             f"Batch terminé : {success} succès / {failure} échecs."
         )
     except Exception as exc:
-        # Bouclier final — ne jamais faire crasher le worker FastAPI
         logger.error(
             f"[BG][comm_id={communication_id}] "
             f"Erreur fatale dans la tâche d'arrière-plan : {exc}",
             exc_info=True,
         )
+    finally:
+        # Nettoyer le fichier temporaire
+        if attachment_path and os.path.exists(attachment_path):
+            try:
+                os.remove(attachment_path)
+            except Exception:
+                pass
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Route principale
-# ─────────────────────────────────────────────────────────────────────────────
+def _resolve_target_ids(
+    cible: str,
+    evenement_id: Optional[int],
+    adherent_ids: Optional[List[int]],
+    db: Session,
+) -> List[int]:
+    """Résout les IDs des entreprises ciblées selon le type de cible."""
+    from sqlalchemy import text as sql_text
 
-@router.post(
-    "/whatsapp",
-    response_model=WhatsAppBroadcastResponse,
-    status_code=202,  # Accepted — traitement asynchrone
-    summary="Envoi de messages WhatsApp en masse (simultané)",
-    description=(
-        "Résout les destinataires, valide les numéros, enregistre l'historique "
-        "et lance l'envoi simultané en arrière-plan via asyncio.gather."
-    ),
-)
-async def send_whatsapp_broadcast(
-    payload: WhatsAppBroadcastRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-) -> WhatsAppBroadcastResponse:
-
-    # ── 1. Résolution des IDs entreprise selon la cible ───────────────────────
     target_ids: List[int] = []
 
-    if payload.cible == "tous":
-        rows = (
-            db.query(Entreprise.id)
-            .filter(Entreprise.est_valide == True)
-            .all()
-        )
+    if cible == "tous":
+        rows = db.query(Entreprise.id).filter(Entreprise.est_valide == True).all()
         target_ids = [r.id for r in rows]
 
-    elif payload.cible == "partie":
-        if not payload.adherent_ids:
+    elif cible == "partie":
+        if not adherent_ids:
             raise HTTPException(
                 status_code=422,
                 detail="Le champ 'adherent_ids' est obligatoire quand cible='partie'.",
             )
-        target_ids = list(set(payload.adherent_ids))
+        target_ids = list(set(adherent_ids))
 
-    elif payload.cible == "evenement":
-        if not payload.evenement_id:
+    elif cible == "evenement":
+        if not evenement_id:
             raise HTTPException(
                 status_code=422,
                 detail="Le champ 'evenement_id' est obligatoire quand cible='evenement'.",
             )
-        rows = (
-            db.query(Participation.entreprise_id)
-            .filter(Participation.evenement_id == payload.evenement_id)
-            .all()
-        )
+        rows = db.query(Participation.entreprise_id).filter(
+            Participation.evenement_id == evenement_id
+        ).all()
         target_ids = [r.entreprise_id for r in rows if r.entreprise_id]
+
+    elif cible in PARTICIPATION_FK_MAP:
+        if not evenement_id:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Le champ 'evenement_id' (element_id) est obligatoire quand cible='{cible}'.",
+            )
+        fk_col = PARTICIPATION_FK_MAP[cible]
+        rows = db.execute(
+            sql_text(f"SELECT DISTINCT entreprise_id FROM participation WHERE {fk_col} = :eid AND entreprise_id IS NOT NULL"),
+            {"eid": evenement_id}
+        ).fetchall()
+        target_ids = [row[0] for row in rows]
+
+    return list(set(target_ids))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Route principale — multipart/form-data pour supporter la pièce jointe
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/whatsapp",
+    status_code=202,
+    summary="Envoi de messages WhatsApp en masse avec pièce jointe optionnelle",
+)
+async def send_whatsapp_broadcast(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    titre: str = Form(...),
+    contenu: str = Form(...),
+    cible: str = Form(...),
+    evenement_id: Optional[int] = Form(None),
+    adherent_ids: Optional[str] = Form(None),
+    cibles_json: Optional[str] = Form(None),   # Multi-cibles: JSON [{type, element_id}]
+    attachment: Optional[UploadFile] = File(None),
+):
+    import json as json_lib
+
+    # Parser adherent_ids depuis JSON string si fourni
+    parsed_adherent_ids: Optional[List[int]] = None
+    if adherent_ids:
+        try:
+            parsed_adherent_ids = json_lib.loads(adherent_ids)
+        except Exception:
+            parsed_adherent_ids = None
+
+    # ── 1. Résolution des IDs cibles ──────────────────────────────────────────
+    target_ids: List[int] = []
+
+    # Support multi-cibles
+    if cibles_json:
+        try:
+            cibles_list = json_lib.loads(cibles_json)  # [{type, element_id}, ...]
+            for cible_item in cibles_list:
+                ids = _resolve_target_ids(
+                    cible=cible_item.get("type", "tous"),
+                    evenement_id=cible_item.get("element_id"),
+                    adherent_ids=parsed_adherent_ids,
+                    db=db,
+                )
+                target_ids.extend(ids)
+        except Exception as e:
+            logger.warning(f"Erreur parse cibles_json: {e}")
+    else:
+        target_ids = _resolve_target_ids(
+            cible=cible,
+            evenement_id=evenement_id,
+            adherent_ids=parsed_adherent_ids,
+            db=db,
+        )
 
     target_ids = list(set(target_ids))
 
     if not target_ids:
         raise HTTPException(
             status_code=404,
-            detail=(
-                "Aucun destinataire trouvé pour la cible spécifiée. "
-                "Vérifiez que des adhérents validés existent."
-            ),
+            detail="Aucun destinataire trouvé pour la cible spécifiée.",
         )
 
-    # ── 2. Récupération et validation stricte des numéros ─────────────────────
+    # ── 2. Validation des numéros ─────────────────────────────────────────────
     valid_phones: List[str] = []
     invalid_count: int = 0
 
@@ -195,7 +221,6 @@ async def send_whatsapp_broadcast(
             formatted = format_moroccan_phone(raw)
             if is_valid_phone(formatted):
                 valid_phones.append(formatted)
-                logger.debug(f"  ✓ id={ent.id} → {formatted}")
             else:
                 invalid_count += 1
                 nom = ent.raison_sociale or f"{ent.prenom or ''} {ent.nom or ''}".strip()
@@ -207,24 +232,36 @@ async def send_whatsapp_broadcast(
     if not valid_phones:
         raise HTTPException(
             status_code=422,
-            detail=(
-                "Aucun numéro de téléphone valide trouvé parmi les destinataires sélectionnés. "
-                "Assurez-vous que les adhérents ont un numéro renseigné au format marocain."
-            ),
+            detail="Aucun numéro de téléphone valide trouvé parmi les destinataires.",
         )
 
-    # ── 3. Sauvegarde immédiate dans l'historique ─────────────────────────────
+    # ── 3. Gestion de la pièce jointe ─────────────────────────────────────────
+    attachment_path: Optional[str] = None
+    attachment_name: Optional[str] = None
+
+    if attachment and attachment.filename:
+        temp_dir = "temp_attachments"
+        os.makedirs(temp_dir, exist_ok=True)
+        ext = os.path.splitext(attachment.filename)[1]
+        attachment_name = attachment.filename
+        attachment_path = os.path.join(temp_dir, f"{uuid.uuid4().hex}{ext}")
+        with open(attachment_path, "wb") as buffer:
+            shutil.copyfileobj(attachment.file, buffer)
+        logger.info(f"[WhatsApp] Pièce jointe : {attachment_name} → {attachment_path}")
+
+    # ── 4. Sauvegarde dans l'historique ──────────────────────────────────────
     metrique = (
-        f"Envoi simultané en cours → {len(valid_phones)} numéro(s) valide(s)"
+        f"Envoi simultané → {len(valid_phones)} numéro(s) valide(s)"
         + (f" | {invalid_count} ignoré(s)" if invalid_count else "")
+        + (f" | PJ: {attachment_name}" if attachment_name else "")
     )
     comm = Communication(
-        titre=payload.titre,
+        titre=titre,
         canal="WhatsApp",
-        contenu=payload.contenu,
+        contenu=contenu,
         date_envoi=datetime.utcnow(),
-        evenement_id=payload.evenement_id,
-        destinataires_ids=json.dumps(target_ids),   # stocké au format JSONB
+        evenement_id=evenement_id,
+        destinataires_ids=json_lib.dumps(target_ids),
         nombre_destinataires=len(target_ids),
         statut_ou_metrique=metrique,
     )
@@ -234,30 +271,25 @@ async def send_whatsapp_broadcast(
 
     logger.info(
         f"[WhatsApp] Communication #{comm.id} enregistrée. "
-        f"Expéditeur: {WHATSAPP_FROM} | "
         f"{len(valid_phones)} valides / {invalid_count} invalides."
     )
 
-    # ── 4. Lancement de l'envoi simultané en arrière-plan ────────────────────
-    # FastAPI BackgroundTasks exécute _run_batch_in_background dans le thread pool.
-    # À l'intérieur, asyncio.run() crée sa propre boucle et lance asyncio.gather
-    # pour envoyer tous les messages EN PARALLÈLE (max 10 simultanément).
+    # ── 5. Lancement de l'envoi en arrière-plan ───────────────────────────────
     background_tasks.add_task(
         _run_batch_in_background,
         phones=valid_phones,
-        message=payload.contenu,
+        message=contenu,
         communication_id=comm.id,
+        attachment_path=attachment_path,
+        attachment_name=attachment_name,
     )
 
-    return WhatsAppBroadcastResponse(
-        message=(
-            f"Envoi WhatsApp lancé en parallèle pour {len(valid_phones)} destinataire(s). "
-            f"Expéditeur : {WHATSAPP_FROM}. "
-            f"Suivez la progression dans les logs serveur."
-        ),
-        communication_id=comm.id,
-        expediteur=WHATSAPP_FROM,
-        destinataires_total=len(target_ids),
-        numeros_valides=len(valid_phones),
-        numeros_invalides=invalid_count,
-    )
+    return {
+        "message": f"Envoi WhatsApp lancé pour {len(valid_phones)} destinataire(s).",
+        "communication_id": comm.id,
+        "expediteur": WHATSAPP_FROM,
+        "destinataires_total": len(target_ids),
+        "numeros_valides": len(valid_phones),
+        "numeros_invalides": invalid_count,
+        "piece_jointe": attachment_name or None,
+    }

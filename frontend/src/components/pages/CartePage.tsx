@@ -279,7 +279,7 @@ export default function CartePage({ onNavigate }: CartePageProps) {
               {user?.photo_url ? (
                 <img src={user.photo_url.startsWith('http') ? user.photo_url : `http://127.0.0.1:8000${user.photo_url}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Photo</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Photo</span>
               )}
               {/* Icône de caméra superposée */}
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', padding: '2px', display: 'grid', placeItems: 'center' }}>
@@ -297,7 +297,7 @@ export default function CartePage({ onNavigate }: CartePageProps) {
 
           {/* Quick Actions */}
           <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
-            <button className="btn btn-secondary" style={{ flex: 1, padding: '14px', background: 'white' }} onClick={handlePrint}>
+            <button className="btn btn-secondary" style={{ flex: 1, padding: '14px', background: 'var(--surface)' }} onClick={handlePrint}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7,10 12,15 17,10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
               Télécharger
             </button>
@@ -318,7 +318,7 @@ export default function CartePage({ onNavigate }: CartePageProps) {
                 )}
               </button>
             ) : (
-              <button className="btn btn-secondary" style={{ flex: 1, padding: '14px', background: 'white' }} onClick={() => setIsEditing(true)}>
+              <button className="btn btn-secondary" style={{ flex: 1, padding: '14px', background: 'var(--surface)' }} onClick={() => setIsEditing(true)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
                 Modifier
               </button>
@@ -345,7 +345,7 @@ export default function CartePage({ onNavigate }: CartePageProps) {
                     </div>
                   </div>
                 )) : (
-                  <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>Aucune activité récente.</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '16px 0', textAlign: 'center' }}>Aucune activité récente.</div>
                 )}
               </div>
             </div>

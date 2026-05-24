@@ -18,6 +18,7 @@ class Entreprise(Base):
     ice = Column(String, nullable=True)
     tax_professionnelle = Column(String, nullable=True)
     description_activite = Column(Text, nullable=True)
+    donnees_extra = Column(Text, nullable=True)
     effectif_id = Column(Integer, nullable=True)
     ca_id = Column(Integer, nullable=True)
     forme_juridique_id = Column(Integer, nullable=True)
