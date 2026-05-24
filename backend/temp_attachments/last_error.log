@@ -1,179 +1,163 @@
 Traceback (most recent call last):
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
     self.dialect.do_execute(
     ~~~~~~~~~~~~~~~~~~~~~~~^
         cursor, str_statement, effective_parameters, context
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-psycopg2.errors.CheckViolation: ERREUR:  la nouvelle ligne de la relation « renouvellement » viole la contrainte de vérification « chk_renouv_statut »
-DETAIL:  La ligne en échec contient (1, 7, 2026, 2026, 2026-05-24, 150.00, carte, validé, validé, null, Physique).
+psycopg2.errors.UndefinedColumn: column renouvellement.type_adherent does not exist
+LINE 1: ...nt.entreprise_id AS renouvellement_entreprise_id, renouvelle...
+                                                             ^
 
 
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
     await self.app(scope, receive, _send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
     await self.app(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
     raise exc
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
     await app(scope, receive, sender)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
     await self.app(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\routing.py", line 660, in __call__
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
     await self.middleware_stack(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\routing.py", line 680, in app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
     await route.handle(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\routing.py", line 276, in handle
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 276, in handle
     await self.app(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\fastapi\routing.py", line 134, in app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 134, in app
     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
     raise exc
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
     await app(scope, receive, sender)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\fastapi\routing.py", line 120, in app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 120, in app
     response = await f(request)
                ^^^^^^^^^^^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\fastapi\routing.py", line 674, in app
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 674, in app
     raw_response = await run_endpoint_function(
                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     ...<3 lines>...
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\fastapi\routing.py", line 330, in run_endpoint_function
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 330, in run_endpoint_function
     return await run_in_threadpool(dependant.call, **values)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
     return await anyio.to_thread.run_sync(func)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
     return await get_async_backend().run_sync_in_worker_thread(
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
     return await future
            ^^^^^^^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\anyio\_backends\_asyncio.py", line 986, in run
     result = context.run(func, *args)
-  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 1104, in approuver_renouvellement
-    db.commit()
-    ~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
-    trans.commit(_to_root=True)
-    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File "<string>", line 2, in commit
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
-    ret_value = fn(self, *arg, **kw)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
-    self._prepare_impl()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "<string>", line 2, in _prepare_impl
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
-    ret_value = fn(self, *arg, **kw)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
-    self.session.flush()
-    ~~~~~~~~~~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
-    self._flush(objects)
-    ~~~~~~~~~~~^^^^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
-    with util.safe_reraise():
-         ~~~~~~~~~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 121, in __exit__
-    raise exc_value.with_traceback(exc_tb)
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
-    flush_context.execute()
-    ~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
-    rec.execute(self)
-    ~~~~~~~~~~~^^^^^^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
-    util.preloaded.orm_persistence.save_obj(
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        self.mapper,
-        ^^^^^^^^^^^^
-        uow.states_for_mapper_hierarchy(self.mapper, False, False),
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        uow,
-        ^^^^
-    )
-    ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
-    _emit_update_statements(
-    ~~~~~~~~~~~~~~~~~~~~~~~^
-        base_mapper,
-        ^^^^^^^^^^^^
-    ...<3 lines>...
-        update,
+  File "C:\stage_projet\backend\app\api\endpoints_admin.py", line 1001, in get_renouvellements
+    .order_by(Renouvellement.date_paiement.desc()).all()
+                                                   ~~~^^
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\orm\query.py", line 2711, in all
+    return self._iter().all()  # type: ignore
+           ~~~~~~~~~~^^
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\orm\query.py", line 2864, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+                                                  ~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+        params,
         ^^^^^^^
+        execution_options={"_sa_orm_load_options": self.load_options},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
-    c = connection.execute(
-        statement, multiparams, execution_options=execution_options
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        _add_event=_add_event,
+        ^^^^^^^^^^^^^^^^^^^^^^
     )
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    ^
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\orm\session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self,
+        ^^^^^
+    ...<4 lines>...
+        conn,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\orm\context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+        statement, params or {}, execution_options=execution_options
+    )
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
     return meth(
         self,
         distilled_parameters,
         execution_options or NO_OPTIONS,
     )
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
     return connection._execute_clauseelement(
            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
         self, distilled_params, execution_options
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
     ret = self._execute_context(
         dialect,
     ...<8 lines>...
         cache_hit=cache_hit,
     )
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
     return self._exec_single_context(
            ~~~~~~~~~~~~~~~~~~~~~~~~~^
         dialect, context, statement, parameters
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
     self._handle_dbapi_exception(
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
         e, str_statement, effective_parameters, cursor, context
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
     self.dialect.do_execute(
     ~~~~~~~~~~~~~~~~~~~~~~~^
         cursor, str_statement, effective_parameters, context
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\stage_projet\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+  File "C:\Users\soula\AppData\Local\Programs\Python\Python314\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
     cursor.execute(statement, parameters)
     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-sqlalchemy.exc.IntegrityError: (psycopg2.errors.CheckViolation) ERREUR:  la nouvelle ligne de la relation « renouvellement » viole la contrainte de vérification « chk_renouv_statut »
-DETAIL:  La ligne en échec contient (1, 7, 2026, 2026, 2026-05-24, 150.00, carte, validé, validé, null, Physique).
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column renouvellement.type_adherent does not exist
+LINE 1: ...nt.entreprise_id AS renouvellement_entreprise_id, renouvelle...
+                                                             ^
 
-[SQL: UPDATE renouvellement SET statut=%(statut)s, statut_paiement=%(statut_paiement)s WHERE renouvellement.id = %(renouvellement_id)s]
-[parameters: {'statut': 'validé', 'statut_paiement': 'validé', 'renouvellement_id': 1}]
-(Background on this error at: https://sqlalche.me/e/20/gkpj)
+[SQL: SELECT renouvellement.id AS renouvellement_id, renouvellement.annee AS renouvellement_annee, renouvellement.annee_fiscale AS renouvellement_annee_fiscale, renouvellement.date_paiement AS renouvellement_date_paiement, renouvellement.montant AS renouvellement_montant, renouvellement.mode_paiement AS renouvellement_mode_paiement, renouvellement.statut AS renouvellement_statut, renouvellement.statut_paiement AS renouvellement_statut_paiement, renouvellement.preuve_paiement AS renouvellement_preuve_paiement, renouvellement.entreprise_id AS renouvellement_entreprise_id, renouvellement.type_adherent AS renouvellement_type_adherent, entreprise.id AS entreprise_id, entreprise.raison_sociale AS entreprise_raison_sociale, entreprise.telephone AS entreprise_telephone, entreprise.email AS entreprise_email, entreprise.nom AS entreprise_nom, entreprise.prenom AS entreprise_prenom, entreprise.adresse AS entreprise_adresse, entreprise.date_creation AS entreprise_date_creation, entreprise.ice AS entreprise_ice, entreprise.tax_professionnelle AS entreprise_tax_professionnelle, entreprise.description_activite AS entreprise_description_activite, entreprise.donnees_extra AS entreprise_donnees_extra, entreprise.effectif_id AS entreprise_effectif_id, entreprise.ca_id AS entreprise_ca_id, entreprise.forme_juridique_id AS entreprise_forme_juridique_id, entreprise.marque_id AS entreprise_marque_id, entreprise.ville_id AS entreprise_ville_id, entreprise.est_valide AS entreprise_est_valide, entreprise.derniere_connexion_activite AS entreprise_derniere_connexion_activite, entreprise.cin AS entreprise_cin, entreprise.date_naissance AS entreprise_date_naissance, entreprise.profession AS entreprise_profession, entreprise.numero_patente AS entreprise_numero_patente, entreprise.rc AS entreprise_rc, entreprise.secteur_activite AS entreprise_secteur_activite, entreprise.numero_registre AS entreprise_numero_registre, entreprise.numero_auto_entrepreneur AS entreprise_numero_auto_entrepreneur, entreprise.objet_association AS entreprise_objet_association, entreprise.nom_president AS entreprise_nom_president, entreprise.liste_membres_bureau AS entreprise_liste_membres_bureau, entreprise.photo_url AS entreprise_photo_url 
+FROM renouvellement JOIN entreprise ON renouvellement.entreprise_id = entreprise.id ORDER BY renouvellement.date_paiement DESC]
+(Background on this error at: https://sqlalche.me/e/20/f405)
